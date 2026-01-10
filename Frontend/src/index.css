@@ -1,0 +1,341 @@
+@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Mono&display=swap");
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #0a0a0f;
+  --bg2: #12121a;
+  --cyan: #00f0ff;
+  --magenta: #ff00aa;
+  --green: #00ff88;
+  --orange: #ff8800;
+}
+
+body {
+  font-family: "Space Mono", monospace;
+  background: var(--bg);
+  color: white;
+  min-height: 100vh;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+}
+
+/* Header */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: var(--bg2);
+  border-radius: 12px;
+  margin-bottom: 1rem;
+}
+
+.logo {
+  font-family: "Orbitron", sans-serif;
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: 3px;
+  background: linear-gradient(135deg, var(--cyan), var(--magenta));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.status.online {
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid var(--green);
+}
+
+.status.offline {
+  background: rgba(255, 0, 100, 0.1);
+  border: 1px solid #ff3366;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 1s infinite;
+}
+
+.online .status-dot {
+  background: var(--green);
+  box-shadow: 0 0 10px var(--green);
+}
+
+.offline .status-dot {
+  background: #ff3366;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.latency {
+  margin-left: 1rem;
+  padding-left: 1rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Main Layout */
+.main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+}
+
+.left-panel,
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Video Feed */
+.video-container {
+  background: var(--bg2);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.video-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent);
+  z-index: 10;
+}
+
+.live-badge {
+  color: #ff3366;
+  font-weight: bold;
+  animation: pulse 1s infinite;
+}
+
+.resolution {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+}
+
+.video-canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Stats Row */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+.stat-card {
+  background: var(--bg2);
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.stat-icon {
+  font-size: 1.5rem;
+}
+
+.stat-value {
+  font-family: "Orbitron", sans-serif;
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: var(--cyan);
+}
+
+.stat-label {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+}
+
+/* Hype Gauge */
+.hype-gauge {
+  background: var(--bg2);
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.gauge-svg {
+  width: 180px;
+  height: 180px;
+}
+
+.gauge-text {
+  font-family: "Orbitron", sans-serif;
+  font-size: 28px;
+  font-weight: 900;
+  fill: white;
+}
+
+.gauge-label {
+  font-family: "Orbitron", sans-serif;
+  font-size: 12px;
+  fill: rgba(255, 255, 255, 0.6);
+  letter-spacing: 2px;
+}
+
+/* Energy Bar */
+.energy-bar {
+  background: var(--bg2);
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.energy-label {
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  min-width: 60px;
+}
+
+.energy-track {
+  flex: 1;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.energy-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.2s;
+}
+
+.energy-value {
+  font-family: "Orbitron", sans-serif;
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: var(--green);
+  min-width: 50px;
+  text-align: right;
+}
+
+/* Heatmap */
+.heatmap {
+  background: var(--bg2);
+  border-radius: 12px;
+  padding: 1rem;
+  flex: 1;
+}
+
+.heatmap-title {
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 0.75rem;
+  letter-spacing: 2px;
+}
+
+.heatmap-grid {
+  display: grid;
+  gap: 3px;
+  aspect-ratio: 1;
+}
+
+.heatmap-cell {
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.2);
+  z-index: 10;
+}
+
+/* Loading */
+.loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hint {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.85rem;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .main {
+    grid-template-columns: 1fr;
+  }
+
+  .right-panel {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .hype-gauge,
+  .energy-bar {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  .heatmap {
+    width: 100%;
+  }
+}

@@ -1,6 +1,30 @@
-numpy
-pybind11
-ultralytics
-python-socketio
-aiohttp
-influxdb-client
+# numpy
+# pybind11
+# ultralytics
+# python-socketio
+# aiohttp
+# influxdb-client
+
+# Vibe-Check Backend Dependencies
+
+# Core
+numpy>=1.24.0
+opencv-python>=4.8.0
+
+# Build tools
+pybind11>=2.11.0
+cmake>=3.16
+
+# ML / Pose estimation
+ultralytics>=8.0.0
+torch>=2.0.0
+
+# Web server
+aiohttp>=3.8.0
+python-socketio>=5.8.0
+
+# Database (optional - for momentum tracking)
+influxdb-client>=1.36.0
+
+# Development
+watchdog>=3.0.0  # For auto-reload during development
