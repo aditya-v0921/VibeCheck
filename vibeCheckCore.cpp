@@ -220,77 +220,6 @@ private:
     }
 };
 
-
-
-class FastMotionDetector {
-public:
-    FastMotionDetector(int grid_h = 8, int grid_w = 8, float threshold = 25.0f)
-        : grid_h_(grid_h), grid_w_(grid_w), threshold_(threshold) {}
-
-    py::tuple process(py::array frame_bgr) {
-        py::buffer_info info = frame_bgr.request();
-        
-        if (info.ndim != 3 || info.shape[2] != 3) {
-            throw std::invalid_argument("frame must be HxWx3 BGR array");
-        }
-
-        const int h = static_cast<int>(info.shape[0]);
-        const int w = static_cast<int>(info.shape[1]);
-        
-        cv::Mat bgr(h, w, CV_8UC3, info.ptr, static_cast<size_t>(info.strides[0]));
-        cv::Mat gray;
-        cv::cvtColor(bgr, gray, cv::COLOR_BGR2GRAY);
-        cv::GaussianBlur(gray, gray, cv::Size(5, 5), 0);
-
-        if (prev_gray_.empty()) {
-            prev_gray_ = gray.clone();
-            py::array_t<float> heatmap({grid_h_, grid_w_});
-            auto hm = heatmap.mutable_unchecked<2>();
-            for (int i = 0; i < grid_h_; i++)
-                for (int j = 0; j < grid_w_; j++)
-                    hm(i, j) = 0.0f;
-            return py::make_tuple(heatmap, 0.0f);
-        }
-
-        // Frame differencing
-        cv::Mat diff;
-        cv::absdiff(prev_gray_, gray, diff);
-        cv::threshold(diff, diff, threshold_, 255, cv::THRESH_BINARY);
-        
-        prev_gray_ = gray.clone();
-
-        // Compute grid-based motion
-        py::array_t<float> heatmap({grid_h_, grid_w_});
-        auto hm = heatmap.mutable_unchecked<2>();
-        
-        const int cell_h = h / grid_h_;
-        const int cell_w = w / grid_w_;
-        double total = 0.0;
-
-        for (int gy = 0; gy < grid_h_; gy++) {
-            for (int gx = 0; gx < grid_w_; gx++) {
-                cv::Rect roi(gx * cell_w, gy * cell_h, cell_w, cell_h);
-                cv::Mat cell = diff(roi);
-                float motion = static_cast<float>(cv::countNonZero(cell)) / (cell_w * cell_h);
-                hm(gy, gx) = motion * 10.0f;  // Scale for visibility
-                total += motion;
-            }
-        }
-
-        return py::make_tuple(heatmap, static_cast<float>(total / (grid_h_ * grid_w_) * 10.0f));
-    }
-
-    void reset() {
-        prev_gray_.release();
-    }
-
-private:
-    int grid_h_, grid_w_;
-    float threshold_;
-    cv::Mat prev_gray_;
-};
-
-
 // Python module definition
 PYBIND11_MODULE(vibe_core, m) {
     m.doc() = "Vibe-Check core motion engine (C++ optical flow heatmap generation)";
@@ -308,16 +237,6 @@ PYBIND11_MODULE(vibe_core, m) {
              "Reset engine state (clears previous frame)")
         .def("get_stats", &MotionEngine::get_stats,
              "Get processing statistics");
-    
-    py::class_<FastMotionDetector>(m, "FastMotionDetector")
-        .def(py::init<int, int, float>(),
-             py::arg("grid_h") = 8,
-             py::arg("grid_w") = 8,
-             py::arg("threshold") = 25.0f,
-             "Create a fast frame-difference motion detector")
-        .def("process", &FastMotionDetector::process,
-             py::arg("frame_bgr"))
-        .def("reset", &FastMotionDetector::reset);
     
     m.attr("__version__") = "1.0.0";
 }
