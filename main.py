@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Vibe-Check: Biometric-Driven Crowd Analytics
-Main server with live video streaming and skeleton visualization
+With InfluxDB time-series storage for momentum tracking
 """
 
 import time
@@ -13,22 +13,60 @@ import socketio
 from ultralytics import YOLO
 from aiohttp import web
 
-# Import the C++ motion engine
+# InfluxDB
+from influxdb_client import InfluxDBClient, Point
+from influxdb_client.client.write_api import ASYNCHRONOUS
+
+# C++ motion engine
 import vibe_core
 
+# ============================================================================
 # CONFIGURATION
+# ============================================================================
 
-CAM_SOURCE = 1  # "auto", integer index (0,1,2...), or RTSP URL
+# Camera
+CAM_SOURCE = 1  # Change to your iPhone camera index
 PREFERRED_RESOLUTION = (1280, 720)
 PREFERRED_FPS = 30
 
+# Processing
 GRID_H, GRID_W = 8, 8
 POSE_EVERY_N_FRAMES = 2
 CONF_THRESH = 0.35
 EMIT_RATE_HZ = 15
 JPEG_QUALITY = 70
 
-# SOCKET.IO SERVER SETUP
+# INFLUXDB CONFIGURATION - UPDATE THESE VALUES!
+
+INFLUX_ENABLED = True  # Set to False to disable InfluxDB
+INFLUX_URL = "http://localhost:8086"
+INFLUX_TOKEN = "P6qMhteG793e4V1Sje3OTJ5H4zinv7C-zwuqqFQTLadGmf0Caxa1nOMv8djJJRpPdqZ6JoUT-uG8dJzSPYxCYQ=="  # Paste your token from InfluxDB UI
+INFLUX_ORG = "Crowd Check"
+INFLUX_BUCKET = "crowd_metrics"
+
+# INFLUXDB SETUP
+
+influx_client = None
+influx_write_api = None
+influx_query_api = None
+
+if INFLUX_ENABLED:
+    try:
+        influx_client = InfluxDBClient(
+            url=INFLUX_URL,
+            token=INFLUX_TOKEN,
+            org=INFLUX_ORG
+        )
+        influx_write_api = influx_client.write_api(write_options=ASYNCHRONOUS)
+        influx_query_api = influx_client.query_api()
+        print(f"✓ InfluxDB connected: {INFLUX_URL}")
+    except Exception as e:
+        print(f"✗ InfluxDB connection failed: {e}")
+        INFLUX_ENABLED = False
+
+# ============================================================================
+# SOCKET.IO SERVER
+# ============================================================================
 
 sio = socketio.AsyncServer(
     async_mode="aiohttp",
@@ -40,7 +78,9 @@ sio = socketio.AsyncServer(
 app = web.Application()
 sio.attach(app)
 
-# KEYPOINT INDICES & SKELETON
+# ============================================================================
+# POSE DETECTION SETUP
+# ============================================================================
 
 KP_NOSE = 0
 KP_L_EYE, KP_R_EYE = 1, 2
@@ -79,8 +119,7 @@ def get_limb_color(idx1, idx2):
         return COLORS['arms']
     elif idx1 in {13, 14, 15, 16} or idx2 in {13, 14, 15, 16}:
         return COLORS['legs']
-    else:
-        return COLORS['torso']
+    return COLORS['torso']
 
 
 def compute_hype_metrics(kpts_xyc, prev_kpts=None):
@@ -146,7 +185,6 @@ def draw_skeleton(frame, keypoints, conf_thresh=0.3):
     overlay = frame.copy()
     
     for person_kpts in keypoints:
-        # Draw bones
         for idx1, idx2 in SKELETON_CONNECTIONS:
             pt1, pt2 = person_kpts[idx1], person_kpts[idx2]
             if pt1[2] >= conf_thresh and pt2[2] >= conf_thresh:
@@ -156,7 +194,6 @@ def draw_skeleton(frame, keypoints, conf_thresh=0.3):
                 cv2.line(overlay, (x1, y1), (x2, y2), color, 8)
                 cv2.line(frame, (x1, y1), (x2, y2), color, 3)
         
-        # Draw joints
         for i, kpt in enumerate(person_kpts):
             if kpt[2] >= conf_thresh:
                 x, y = int(kpt[0]), int(kpt[1])
@@ -173,7 +210,6 @@ def draw_skeleton(frame, keypoints, conf_thresh=0.3):
                 cv2.circle(frame, (x, y), 6, color, -1)
                 cv2.circle(frame, (x, y), 6, (255, 255, 255), 2)
         
-        # "HYPE!" indicator
         nose = person_kpts[KP_NOSE]
         l_wrist, r_wrist = person_kpts[KP_L_WRIST], person_kpts[KP_R_WRIST]
         
@@ -188,10 +224,111 @@ def draw_skeleton(frame, keypoints, conf_thresh=0.3):
     return frame
 
 
+# ============================================================================
+# INFLUXDB HELPER FUNCTIONS
+# ============================================================================
+
+def write_metrics_to_influx(energy, hype_score, people_count, hands_up, jumping):
+    """Write current metrics to InfluxDB."""
+    if not INFLUX_ENABLED or not influx_write_api:
+        return
+    
+    try:
+        point = (
+            Point("crowd_metrics")
+            .field("energy", float(energy))
+            .field("hype_score", float(hype_score))
+            .field("people_count", int(people_count))
+            .field("hands_up_ratio", float(hands_up))
+            .field("jumping_ratio", float(jumping))
+        )
+        influx_write_api.write(bucket=INFLUX_BUCKET, record=point)
+    except Exception as e:
+        print(f"InfluxDB write error: {e}")
+
+
+def query_momentum(minutes=5):
+    """
+    Query average energy over the last N minutes.
+    Returns list of {time, energy} points for graphing.
+    """
+    if not INFLUX_ENABLED or not influx_query_api:
+        return []
+    
+    try:
+        query = f'''
+        from(bucket: "{INFLUX_BUCKET}")
+            |> range(start: -{minutes}m)
+            |> filter(fn: (r) => r._measurement == "crowd_metrics")
+            |> filter(fn: (r) => r._field == "energy")
+            |> aggregateWindow(every: 5s, fn: mean, createEmpty: false)
+        '''
+        
+        result = influx_query_api.query(query)
+        
+        data = []
+        for table in result:
+            for record in table.records:
+                data.append({
+                    "time": record.get_time().isoformat(),
+                    "energy": record.get_value()
+                })
+        
+        return data
+    except Exception as e:
+        print(f"InfluxDB query error: {e}")
+        return []
+
+
+def query_track_analysis(minutes=3):
+    """
+    Analyze the last N minutes - useful for "how did that track do?"
+    Returns summary stats.
+    """
+    if not INFLUX_ENABLED or not influx_query_api:
+        return None
+    
+    try:
+        query = f'''
+        from(bucket: "{INFLUX_BUCKET}")
+            |> range(start: -{minutes}m)
+            |> filter(fn: (r) => r._measurement == "crowd_metrics")
+            |> filter(fn: (r) => r._field == "energy" or r._field == "hype_score")
+        '''
+        
+        result = influx_query_api.query(query)
+        
+        energies = []
+        hype_scores = []
+        
+        for table in result:
+            for record in table.records:
+                if record.get_field() == "energy":
+                    energies.append(record.get_value())
+                elif record.get_field() == "hype_score":
+                    hype_scores.append(record.get_value())
+        
+        if not energies:
+            return None
+        
+        return {
+            "avg_energy": np.mean(energies),
+            "max_energy": np.max(energies),
+            "min_energy": np.min(energies),
+            "avg_hype": np.mean(hype_scores) if hype_scores else 0,
+            "trend": "up" if len(energies) > 1 and energies[-1] > energies[0] else "down"
+        }
+    except Exception as e:
+        print(f"InfluxDB query error: {e}")
+        return None
+
+
+# ============================================================================
 # CAMERA SETUP
+# ============================================================================
 
 def find_camera():
-    print("\nScanning for cameras...")
+    print("\n🔍 Scanning for cameras...")
     for i in range(10):
         cap = cv2.VideoCapture(i, cv2.CAP_AVFOUNDATION)
         if not cap.isOpened():
@@ -212,7 +349,7 @@ def open_camera(source):
     if source == "auto":
         source = find_camera()
     
-    print(f"\nOpening camera: {source}")
+    print(f"\n🎥 Opening camera: {source}")
     
     cap = cv2.VideoCapture(source, cv2.CAP_AVFOUNDATION)
     if not cap.isOpened():
@@ -233,13 +370,15 @@ def open_camera(source):
     return cap
 
 
+# ============================================================================
 # MAIN VISION LOOP
+# ============================================================================
 
 async def vision_loop():
     cap = open_camera(CAM_SOURCE)
     engine = vibe_core.MotionEngine(GRID_H, GRID_W)
     
-    print("\nLoading YOLOv8 pose model...")
+    print("\n🤖 Loading YOLOv8 pose model...")
     model = YOLO("yolov8n-pose.pt")
     
     ret, warm = cap.read()
@@ -249,13 +388,16 @@ async def vision_loop():
     
     frame_count = 0
     last_emit = time.time()
+    last_influx_write = time.time()
     prev_kpts_map = {}
     last_keypoints = None
     energy_hist, hype_hist = [], []
     
     print("\n" + "=" * 50)
-    print("Vision loop started!")
+    print("🚀 Vision loop started!")
     print("   Dashboard: http://localhost:3000")
+    if INFLUX_ENABLED:
+        print("   InfluxDB: http://localhost:8086")
     print("=" * 50 + "\n")
     
     try:
@@ -322,16 +464,36 @@ async def vision_loop():
                 energy_hist.pop(0)
                 hype_hist.pop(0)
             
+            smoothed_energy = float(np.mean(energy_hist))
+            smoothed_hype = float(np.mean(hype_hist))
+            
+            # Write to InfluxDB every 1 second
+            now = time.time()
+            if INFLUX_ENABLED and now - last_influx_write >= 1.0:
+                write_metrics_to_influx(
+                    smoothed_energy, 
+                    smoothed_hype, 
+                    people_count, 
+                    hands_up_ratio, 
+                    jumping_ratio
+                )
+                last_influx_write = now
+            
             # Encode frame
             _, buffer = cv2.imencode('.jpg', display, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
             frame_b64 = base64.b64encode(buffer).decode('utf-8')
             
+            # Query momentum data (every 5 seconds to avoid overload)
+            momentum_data = []
+            if INFLUX_ENABLED and frame_count % 75 == 0:  # ~every 5 sec at 15fps
+                momentum_data = query_momentum(minutes=5)
+            
             payload = {
                 "ts": time.time(),
-                "meanEnergy": float(np.mean(energy_hist)),
+                "meanEnergy": smoothed_energy,
                 "heatmap": heatmap.tolist(),
                 "zones": classify_zones(heatmap),
-                "hypeScore": float(np.mean(hype_hist)),
+                "hypeScore": smoothed_hype,
                 "handsUpRatio": hands_up_ratio,
                 "jumpingRatio": jumping_ratio,
                 "peopleCount": people_count,
@@ -340,10 +502,10 @@ async def vision_loop():
                 "frame": frame_b64,
                 "keypoints": keypoints_list,
                 "frameWidth": display.shape[1],
-                "frameHeight": display.shape[0]
+                "frameHeight": display.shape[0],
+                "momentum": momentum_data  # Historical data from InfluxDB
             }
             
-            now = time.time()
             if now - last_emit >= (1.0 / EMIT_RATE_HZ):
                 await sio.emit("vibe_update", payload)
                 last_emit = now
@@ -351,19 +513,44 @@ async def vision_loop():
             await asyncio.sleep(0)
     finally:
         cap.release()
+        if influx_client:
+            influx_client.close()
 
 
-# HTTP ROUTES
+# ============================================================================
+# HTTP API ENDPOINTS
+# ============================================================================
 
 async def index_handler(request):
     return web.Response(text="Vibe-Check Server Running", content_type="text/plain")
 
-app.router.add_get("/", index_handler)
 
+async def momentum_handler(request):
+    """API endpoint to get momentum data."""
+    minutes = int(request.query.get('minutes', 5))
+    data = query_momentum(minutes)
+    return web.json_response(data)
+
+
+async def track_analysis_handler(request):
+    """API endpoint to analyze last track."""
+    minutes = int(request.query.get('minutes', 3))
+    data = query_track_analysis(minutes)
+    return web.json_response(data or {"error": "No data"})
+
+
+app.router.add_get("/", index_handler)
+app.router.add_get("/api/momentum", momentum_handler)
+app.router.add_get("/api/track-analysis", track_analysis_handler)
+
+
+# ============================================================================
 # APP LIFECYCLE
+# ============================================================================
 
 async def start_background_tasks(app):
     app["vision_task"] = asyncio.create_task(vision_loop())
+
 
 async def cleanup_background_tasks(app):
     app["vision_task"].cancel()
@@ -372,12 +559,25 @@ async def cleanup_background_tasks(app):
     except asyncio.CancelledError:
         pass
 
+
 app.on_startup.append(start_background_tasks)
 app.on_cleanup.append(cleanup_background_tasks)
 
 
 if __name__ == "__main__":
     print("""
-VIBE-CHECK
-Live Video + Skeleton Visualization""")
+╔═══════════════════════════════════════════════════════════╗
+║                      VIBE-CHECK                           ║
+║        Live Video + Skeleton + InfluxDB Momentum          ║
+╚═══════════════════════════════════════════════════════════╝
+    """)
+    
+    if INFLUX_ENABLED:
+        print("📊 InfluxDB: ENABLED")
+        print(f"   URL: {INFLUX_URL}")
+        print(f"   Bucket: {INFLUX_BUCKET}")
+    else:
+        print("📊 InfluxDB: DISABLED")
+    
+    print()
     web.run_app(app, host="0.0.0.0", port=8000)

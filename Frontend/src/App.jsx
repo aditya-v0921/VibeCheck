@@ -36,42 +36,64 @@ function LiveVideoFeed({ frameData, keypoints, width, height }) {
 }
 
 function HypeGauge({ value }) {
-  const rotation = -135 + value * 270;
-  const hue = value * 120;
+  const v = Math.max(0, Math.min(1, value ?? 0)); // clamp 0..1
+  const rotation = -135 + v * 270;
+  const hue = v * 120;
+
+  // We set pathLength=100, so "100" is the full arc length in dash units
+  const dashArray = 100;
+  const dashOffset = 100 - v * 100;
 
   return (
     <div className="hype-gauge">
-      <svg viewBox="0 0 200 200" className="gauge-svg">
+      <svg
+        viewBox="0 0 200 200"
+        className="gauge-svg"
+        preserveAspectRatio="xMidYMid meet"
+      >
+        {/* Track */}
         <path
           d="M 30 150 A 80 80 0 1 1 170 150"
           fill="none"
           stroke="rgba(255,255,255,0.1)"
           strokeWidth="12"
           strokeLinecap="round"
+          pathLength="100"
         />
+
+        {/* Progress (single continuous stroke, no split ends) */}
         <path
           d="M 30 150 A 80 80 0 1 1 170 150"
           fill="none"
           stroke={`hsl(${hue}, 100%, 50%)`}
           strokeWidth="12"
           strokeLinecap="round"
-          strokeDasharray={`${value * 251.2} 251.2`}
-          style={{ filter: `drop-shadow(0 0 10px hsl(${hue}, 100%, 50%))` }}
+          pathLength="100"
+          strokeDasharray={dashArray}
+          strokeDashoffset={dashOffset}
+          style={{
+            filter: `drop-shadow(0 0 10px hsl(${hue}, 100%, 50%))`,
+            transition: "stroke-dashoffset 150ms linear, stroke 150ms linear",
+          }}
         />
+
+        {/* Needle */}
         <g transform={`rotate(${rotation} 100 100)`}>
           <line
             x1="100"
             y1="100"
             x2="100"
-            y2="35"
+            y2="20"
             stroke="white"
             strokeWidth="3"
             strokeLinecap="round"
           />
           <circle cx="100" cy="100" r="8" fill="white" />
         </g>
+
+        {/* Text */}
         <text x="100" y="125" textAnchor="middle" className="gauge-text">
-          {(value * 100).toFixed(0)}%
+          {(v * 100).toFixed(0)}%
         </text>
         <text x="100" y="150" textAnchor="middle" className="gauge-label">
           HYPE

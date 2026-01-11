@@ -2,7 +2,6 @@
  * Vibe-Check Core Motion Engine
  * 
  * High-performance optical flow heatmap generation using Farneback algorithm.
- * Compiled as a Python extension via pybind11.
  */
 
 #include <iostream>
