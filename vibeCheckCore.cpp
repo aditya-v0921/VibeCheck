@@ -75,7 +75,6 @@ public:
         cv::Mat gray;
         cv::cvtColor(bgr, gray, cv::COLOR_BGR2GRAY);
         
-        // Optional: Apply slight blur to reduce noise
         cv::GaussianBlur(gray, gray, cv::Size(3, 3), 0);
 
         // If first frame, store and return zeros
@@ -88,13 +87,13 @@ public:
         cv::Mat flow;
         cv::calcOpticalFlowFarneback(
             prev_gray_, gray, flow,
-            0.5,   // pyr_scale - scale between pyramid levels
-            3,     // levels - number of pyramid levels
-            15,    // winsize - averaging window size
-            3,     // iterations - per pyramid level
-            5,     // poly_n - size of pixel neighborhood
-            1.2,   // poly_sigma - Gaussian std for derivatives
-            0      // flags
+            0.5,// pyr_scale - scale between pyramid levels
+            3,// levels - number of pyramid levels
+            15,// winsize - averaging window size
+            3,// iterations - per pyramid level
+            5,// poly_n - size of pixel neighborhood
+            1.2,// poly_sigma - Gaussian std for derivatives
+            0// flags
         );
 
         // Store current frame for next iteration
@@ -222,10 +221,7 @@ private:
 };
 
 
-/**
- * Alternative lightweight motion detector using frame differencing.
- * Faster than optical flow but less accurate.
- */
+
 class FastMotionDetector {
 public:
     FastMotionDetector(int grid_h = 8, int grid_w = 8, float threshold = 25.0f)
