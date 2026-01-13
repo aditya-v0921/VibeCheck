@@ -1,2 +1,9 @@
-# sbHacks
-Project for SBhacks hackathon
+# Vibe Check - SBHacks 1st Place: Entertainment Track
+
+What it does
+
+My goal is to accurately provide the DJ/manager with real-time data about energy levels in the crowd, where, in the frame of reference, the crowd is more "hype", and to sync different processes based on crowd engagement and preference. One of these features includes accessing attendees' Spotify data with their permission to extract crowd favorite genres, which are ranked in real-time by popularity. Another important feature I chose to integrate was synchronizing lights in a venue to match the energy levels of the crowd.
+
+How I built it
+
+I built Vibe Check by starting from the core of our project, which was optical flow tracking with OpenCV. I ran this and tested its accuracy in low-light settings to assess its feasibility with our vision. Then, we worked to extract the intensity of movements from the Farneback optical flow method so that we could vectorize each pixel in successive frames and measure movement. After this, we added weights so that we could calculate a real score for hype and energy levels. Then, we split the frame into a grid and figured out where in the grid energy movement was coming from. This allowed us to create a heatmap of energy in the frame. To display this, we built a React user interface and used WebSocket to host it seamlessly on our local machine. We then connected this data to an InfluxDB database in which we could store energy levels by timestamp and per frame for later use. From here, we brainstormed additional features to add. For example, we thought to add a feature that allows attendees to scan a QR code and then give permission to access their Spotify listening data in exchange for a voucher of sorts. We showed this as a proof of concept on our Vibe Check dashboard by simulating a demo stream of check-ins and popular genre rankings for the DJ to adapt to. Another feature we thought to demonstrate was integrating the energy level with venue lighting systems so that they can adapt accordingly.
