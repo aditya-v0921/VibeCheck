@@ -1,6 +1,6 @@
 # Vibe Check - SBHacks 1st Place: Entertainment Track
 
-![Image not loading](image-url)
+![Image not loading](VibeCheckDashboard.jpg)
 
 ## **What it does**
 My goal is to accurately provide the DJ/manager with real-time data about energy levels in the crowd, where, in the frame of reference, the crowd is more "hype", and to sync different processes based on crowd engagement and preference. One of these features includes accessing attendees' Spotify data with their permission to extract crowd favorite genres, which are ranked in real-time by popularity. Another important feature I chose to integrate was synchronizing lights in a venue to match the energy levels of the crowd.
