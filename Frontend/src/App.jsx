@@ -61,6 +61,27 @@ const FAKE_NAMES = [
   "Blake W.",
 ];
 
+const DEMO_DATA = {
+  hypeScore: 0.58,
+  meanEnergy: 7.4,
+  heatmap: [
+    [2, 3, 4, 5, 4, 3, 2, 1],
+    [2, 5, 8, 9, 7, 5, 3, 2],
+    [3, 6, 10, 12, 10, 6, 4, 2],
+    [2, 4, 7, 9, 8, 5, 3, 1],
+    [1, 3, 5, 6, 5, 4, 2, 1],
+  ],
+  zones: [
+    ["low", "low", "medium", "medium", "medium", "low", "low", "low"],
+    ["low", "medium", "high", "high", "medium", "medium", "low", "low"],
+    ["medium", "medium", "high", "high", "high", "medium", "medium", "low"],
+    ["low", "medium", "medium", "high", "medium", "medium", "low", "low"],
+    ["low", "low", "medium", "medium", "medium", "low", "low", "low"],
+  ],
+  latencyMs: 18,
+  fps: 30,
+};
+
 function useSimulatedCheckins(enabled) {
   const [genres, setGenres] = useState(INITIAL_GENRES);
   const [checkins, setCheckins] = useState(INITIAL_CHECKINS);
@@ -117,7 +138,7 @@ function getLightSettings(hypeScore, energy) {
   if (hype > 0.7 || nrg > 10) {
     return {
       mode: "STROBE",
-      color: "#ff0044",
+      color: "#d85f5a",
       intensity: 100,
       bpm: 140,
       description: "High intensity strobe sync'd to beat",
@@ -125,7 +146,7 @@ function getLightSettings(hypeScore, energy) {
   } else if (hype > 0.4 || nrg > 5) {
     return {
       mode: "PULSE",
-      color: "#ff00ff",
+      color: "#b78c52",
       intensity: 75,
       bpm: 128,
       description: "Rhythmic pulse with color wash",
@@ -133,7 +154,7 @@ function getLightSettings(hypeScore, energy) {
   } else if (hype > 0.2 || nrg > 2) {
     return {
       mode: "WAVE",
-      color: "#00ffff",
+      color: "#5f9ea0",
       intensity: 50,
       bpm: 120,
       description: "Gentle wave across fixtures",
@@ -141,7 +162,7 @@ function getLightSettings(hypeScore, energy) {
   } else {
     return {
       mode: "AMBIENT",
-      color: "#4400ff",
+      color: "#7d8aa2",
       intensity: 25,
       bpm: 0,
       description: "Low ambient glow",
@@ -257,17 +278,13 @@ function LiveVideoFeed({ frameData, width, height }) {
 function MetricBar({ label, value, max, type }) {
   const pct = Math.min(100, (value / max) * 100);
 
-  // Hype: 0% = red, 100% = green
-  // Energy: 0% = blue, 100% = orange/red
   let color, gradient;
   if (type === "hype") {
-    const hue = (pct / 100) * 120;
-    color = `hsl(${hue}, 100%, 50%)`;
-    gradient = `linear-gradient(90deg, hsl(0, 100%, 50%), hsl(60, 100%, 50%), hsl(120, 100%, 50%))`;
+    color = pct > 70 ? "#81a684" : pct > 35 ? "#b78c52" : "#b46d67";
+    gradient = "linear-gradient(90deg, #7b5151, #b78c52, #81a684)";
   } else {
-    const hue = 200 - (pct / 100) * 160;
-    color = `hsl(${hue}, 100%, 50%)`;
-    gradient = `linear-gradient(90deg, hsl(200, 100%, 50%), hsl(60, 100%, 50%), hsl(20, 100%, 50%))`;
+    color = pct > 70 ? "#c87968" : pct > 35 ? "#b78c52" : "#6f99a5";
+    gradient = "linear-gradient(90deg, #567f88, #b78c52, #c87968)";
   }
 
   return (
@@ -313,19 +330,20 @@ function Heatmap({ data, zones }) {
           row.map((val, j) => {
             const intensity = val / maxVal;
             const zone = zones?.[i]?.[j] || "low";
-            const colors = { low: 200, medium: 45, high: 0 };
-            const h = colors[zone];
+            const colors = {
+              low: `rgba(92, 128, 136, ${0.2 + intensity * 0.48})`,
+              medium: `rgba(183, 140, 82, ${0.24 + intensity * 0.52})`,
+              high: `rgba(200, 121, 104, ${0.28 + intensity * 0.56})`,
+            };
             return (
               <div
                 key={`${i}-${j}`}
                 className="heatmap-cell"
                 style={{
-                  backgroundColor: `hsla(${h}, 100%, ${30 + intensity * 40}%, ${
-                    0.3 + intensity * 0.7
-                  })`,
+                  backgroundColor: colors[zone],
                   boxShadow:
                     intensity > 0.6
-                      ? `0 0 ${intensity * 15}px hsla(${h}, 100%, 50%, 0.8)`
+                      ? `0 10px ${intensity * 18}px rgba(0, 0, 0, 0.28)`
                       : "none",
                 }}
               />
@@ -396,6 +414,8 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [data, setData] = useState(null);
   const { genres, checkins, totalCheckins } = useSimulatedCheckins(true);
+  const displayData = data || DEMO_DATA;
+  const isPreview = !data;
 
   useEffect(() => {
     const socket = io(SOCKET_URL, {
@@ -419,15 +439,16 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1 className="logo">VIBE-CHECK</h1>
+        <div>
+          <p className="eyebrow">Live crowd intelligence</p>
+          <h1 className="logo">Vibe Check</h1>
+        </div>
         <div className={`status ${connected ? "online" : "offline"}`}>
           <span className="status-dot" />
-          {connected ? "LIVE" : "CAMERA OFFLINE"}
-          {data && (
-            <span className="latency">
-              {data.latencyMs}ms | {data.fps} FPS
-            </span>
-          )}
+          {connected ? "Live feed" : "Preview mode"}
+          <span className="latency">
+            {displayData.latencyMs}ms | {displayData.fps} FPS
+          </span>
         </div>
       </header>
 
@@ -435,7 +456,7 @@ export default function App() {
         {/* TOP SECTION (~1/3): Video + Bars */}
         <div className="top-section">
           <div className="video-wrapper">
-            {data ? (
+            {data?.frame ? (
               <LiveVideoFeed
                 frameData={data.frame}
                 width={data.frameWidth}
@@ -443,8 +464,14 @@ export default function App() {
               />
             ) : (
               <div className="video-placeholder">
-                <div className="spinner" />
-                <p>Waiting for camera...</p>
+                <div className="stage-preview">
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                  <span />
+                </div>
+                <p>{isPreview ? "Camera preview pending" : "Waiting for camera"}</p>
               </div>
             )}
           </div>
@@ -452,13 +479,13 @@ export default function App() {
           <div className="bars-wrapper">
             <MetricBar
               label="HYPE"
-              value={data?.hypeScore || 0}
+              value={displayData.hypeScore}
               max={1}
               type="hype"
             />
             <MetricBar
               label="ENERGY"
-              value={data?.meanEnergy || 0}
+              value={displayData.meanEnergy}
               max={15}
               type="energy"
             />
@@ -468,8 +495,8 @@ export default function App() {
         {/* BOTTOM SECTION (~2/3): Heatmap + Genres + Lights */}
         <div className="bottom-section">
           <div className="heatmap-wrapper">
-            {data ? (
-              <Heatmap data={data.heatmap} zones={data.zones} />
+            {displayData?.heatmap ? (
+              <Heatmap data={displayData.heatmap} zones={displayData.zones} />
             ) : (
               <div className="heatmap-placeholder">
                 <div className="heatmap-title">ENERGY ZONES</div>
@@ -485,8 +512,8 @@ export default function App() {
           />
 
           <LightControlPanel
-            hypeScore={data?.hypeScore || 0}
-            energy={data?.meanEnergy || 0}
+            hypeScore={displayData.hypeScore}
+            energy={displayData.meanEnergy}
           />
         </div>
       </main>

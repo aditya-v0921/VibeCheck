@@ -33,7 +33,7 @@ PREFERRED_FPS = 30
 GRID_H, GRID_W = 8, 8
 POSE_EVERY_N_FRAMES = 2
 CONF_THRESH = 0.35
-EMIT_RATE_HZ = 15
+EMIT_RATE_HZ = 20
 JPEG_QUALITY = 70
 
 # HYPE CALCULATION SETTINGS
@@ -45,9 +45,9 @@ MIN_PEOPLE_FOR_HYPE = 1  # Set to 2+ to require multiple people
 FULL_CROWD_SIZE = 3  # With 3+ people, crowd multiplier = 1.0
 
 # Weights for hype calculation
-WEIGHT_HANDS_UP = 0.5
+WEIGHT_HANDS_UP = 0.4
 WEIGHT_JUMPING = 0.3 
-WEIGHT_MOVEMENT = 0.8
+WEIGHT_MOVEMENT = 0.35
 
 # INFLUXDB CONFIGURATION
 
@@ -263,7 +263,6 @@ def calculate_crowd_hype(people_metrics, people_count, mean_energy):
     # With FULL_CROWD_SIZE people: multiplier = 1.0
     crowd_multiplier = min(1.0, 0.2 + (people_count / FULL_CROWD_SIZE) * 0.8)
     
-    # Participation bonus: what % of people are hyped?
     participation_ratio = hyped_count / people_count
     
     # Base hype from gestures
@@ -274,7 +273,7 @@ def calculate_crowd_hype(people_metrics, people_count, mean_energy):
     )
     
     # Normalize energy to 0-1 scale (assuming max ~15)
-    energy_factor = min(1.0, mean_energy / 10.0) * 2.5
+    energy_factor = min(1.0, mean_energy / 10.0) * 1.6
     
     # Final hype calculation:
     # gesture_hype (0-1) * crowd_multiplier (0-1) * participation_boost
@@ -283,9 +282,9 @@ def calculate_crowd_hype(people_metrics, people_count, mean_energy):
     raw_hype = gesture_hype * crowd_multiplier * participation_boost
     
     # Add energy contribution (movement even without detected gestures)
-    energy_contribution = energy_factor * 0.8 * crowd_multiplier
+    energy_contribution = energy_factor * 0.4 * crowd_multiplier
     
-    final_hype = min(1.0, raw_hype + energy_contribution) * 1.8
+    final_hype = min(1.0, raw_hype + energy_contribution) * 1.4
     
     return {
         "hype_score": float(final_hype),
