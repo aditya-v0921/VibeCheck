@@ -138,7 +138,7 @@ function getLightSettings(hypeScore, energy) {
   if (hype > 0.7 || nrg > 10) {
     return {
       mode: "STROBE",
-      color: "#d85f5a",
+      color: "#8dff9a",
       intensity: 100,
       bpm: 140,
       description: "High intensity strobe sync'd to beat",
@@ -146,7 +146,7 @@ function getLightSettings(hypeScore, energy) {
   } else if (hype > 0.4 || nrg > 5) {
     return {
       mode: "PULSE",
-      color: "#b78c52",
+      color: "#45d973",
       intensity: 75,
       bpm: 128,
       description: "Rhythmic pulse with color wash",
@@ -154,7 +154,7 @@ function getLightSettings(hypeScore, energy) {
   } else if (hype > 0.2 || nrg > 2) {
     return {
       mode: "WAVE",
-      color: "#5f9ea0",
+      color: "#1f9f70",
       intensity: 50,
       bpm: 120,
       description: "Gentle wave across fixtures",
@@ -162,7 +162,7 @@ function getLightSettings(hypeScore, energy) {
   } else {
     return {
       mode: "AMBIENT",
-      color: "#7d8aa2",
+      color: "#104250",
       intensity: 25,
       bpm: 0,
       description: "Low ambient glow",
@@ -280,11 +280,11 @@ function MetricBar({ label, value, max, type }) {
 
   let color, gradient;
   if (type === "hype") {
-    color = pct > 70 ? "#81a684" : pct > 35 ? "#b78c52" : "#b46d67";
-    gradient = "linear-gradient(90deg, #7b5151, #b78c52, #81a684)";
+    color = pct > 70 ? "#8dff9a" : pct > 35 ? "#3ed873" : "#1f8f5a";
+    gradient = "linear-gradient(90deg, #123d35, #1f8f5a, #8dff9a)";
   } else {
-    color = pct > 70 ? "#c87968" : pct > 35 ? "#b78c52" : "#6f99a5";
-    gradient = "linear-gradient(90deg, #567f88, #b78c52, #c87968)";
+    color = pct > 70 ? "#9fff7a" : pct > 35 ? "#45d973" : "#1f7d69";
+    gradient = "linear-gradient(90deg, #092f4c, #1f7d69, #9fff7a)";
   }
 
   return (
@@ -331,9 +331,9 @@ function Heatmap({ data, zones }) {
             const intensity = val / maxVal;
             const zone = zones?.[i]?.[j] || "low";
             const colors = {
-              low: `rgba(92, 128, 136, ${0.2 + intensity * 0.48})`,
-              medium: `rgba(183, 140, 82, ${0.24 + intensity * 0.52})`,
-              high: `rgba(200, 121, 104, ${0.28 + intensity * 0.56})`,
+              low: `rgba(16, 66, 80, ${0.36 + intensity * 0.42})`,
+              medium: `rgba(30, 143, 90, ${0.38 + intensity * 0.46})`,
+              high: `rgba(128, 255, 136, ${0.42 + intensity * 0.5})`,
             };
             return (
               <div
@@ -366,7 +366,7 @@ function GenreRankings({ genres, checkins, totalCheckins }) {
       </div>
 
       <div className="genre-list">
-        {genres.slice(0, 6).map((genre, i) => (
+        {genres.slice(0, 4).map((genre, i) => (
           <div
             key={genre.name}
             className={`genre-item ${i < 3 ? "top-three" : ""}`}
