@@ -31,5 +31,29 @@ class FrameValidationTests(unittest.TestCase):
             self.assertAlmostEqual(padded[1], contiguous[1])
 
 
+class FrameResizeTests(unittest.TestCase):
+    def test_resize_restarts_flow_and_clears_smoothing(self):
+        rng = np.random.default_rng(7)
+        original = rng.integers(0, 256, (32, 64, 3), dtype=np.uint8)
+        for shape in ((48, 64, 3), (32, 80, 3), (48, 80, 3)):
+            with self.subTest(shape=shape):
+                engine = MotionEngine()
+                engine.process(original)
+                _, energy = engine.process(np.roll(original, 3, axis=1))
+                self.assertGreater(energy, 0)
+                resized = rng.integers(0, 256, shape, dtype=np.uint8)
+                heatmap, energy = engine.process(resized)
+                np.testing.assert_array_equal(heatmap, np.zeros((8, 8)))
+                self.assertEqual(energy, 0)
+                self.assertEqual(engine.get_stats()["frame_count"], 1)
+                fresh_engine = MotionEngine()
+                fresh_engine.process(resized)
+                expected_heatmap, expected_energy = fresh_engine.process(resized)
+                heatmap, energy = engine.process(resized)
+                np.testing.assert_allclose(heatmap, expected_heatmap)
+                self.assertAlmostEqual(energy, expected_energy)
+                self.assertEqual(engine.get_stats()["frame_count"], 2)
+
+
 if __name__ == "__main__":
     unittest.main()

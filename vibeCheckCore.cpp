@@ -85,9 +85,10 @@ public:
         
         cv::GaussianBlur(gray, gray, cv::Size(3, 3), 0);
 
-        // If first frame, store and return zeros
-        if (prev_gray_.empty()) {
+        // Start a new comparison when the input resolution changes.
+        if (prev_gray_.empty() || prev_gray_.size() != gray.size()) {
             prev_gray_ = gray.clone();
+            std::fill(heatmap_data_.begin(), heatmap_data_.end(), 0.0f);
             return make_zero_result();
         }
 
