@@ -12,6 +12,7 @@
 #include <cmath>
 #include <algorithm>
 #include <chrono>
+#include <limits>
 
 namespace py = pybind11;
 
@@ -58,18 +59,25 @@ public:
             throw std::invalid_argument("frame must be dtype=uint8.");
         }
 
-        const int h = static_cast<int>(info.shape[0]);
-        const int w = static_cast<int>(info.shape[1]);
-        const int stride0 = static_cast<int>(info.strides[0]);
-        const int stride1 = static_cast<int>(info.strides[1]);
-        const int stride2 = static_cast<int>(info.strides[2]);
+        if (info.shape[0] <= 0 || info.shape[1] <= 0) {
+            throw std::invalid_argument("frame dimensions must be positive.");
+        }
+        if (info.shape[0] > std::numeric_limits<int>::max() ||
+            info.shape[1] > std::numeric_limits<int>::max()) {
+            throw std::invalid_argument("frame dimensions exceed OpenCV limits.");
+        }
 
-        if (stride2 != 1) {
+        // OpenCV permits padded rows, but requires packed BGR pixels.
+        if (info.strides[2] != 1 || info.strides[1] != 3 ||
+            info.strides[0] <= 0 || info.strides[0] / 3 < info.shape[1]) {
             throw std::invalid_argument("Unexpected memory layout for frame.");
         }
 
+        const int h = static_cast<int>(info.shape[0]);
+        const int w = static_cast<int>(info.shape[1]);
+
         // Wrap numpy buffer into cv::Mat without copy
-        cv::Mat bgr(h, w, CV_8UC3, info.ptr, static_cast<size_t>(stride0));
+        cv::Mat bgr(h, w, CV_8UC3, info.ptr, static_cast<size_t>(info.strides[0]));
 
         // Convert to grayscale
         cv::Mat gray;
