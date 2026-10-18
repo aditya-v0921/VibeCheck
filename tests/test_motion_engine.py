@@ -55,5 +55,23 @@ class FrameResizeTests(unittest.TestCase):
                 self.assertEqual(engine.get_stats()["frame_count"], 2)
 
 
+class SmallFrameTests(unittest.TestCase):
+    def test_frames_smaller_than_grid_have_empty_excess_cells(self):
+        rng = np.random.default_rng(19)
+        for height, width in ((1, 1), (3, 5), (7, 16), (16, 7)):
+            with self.subTest(height=height, width=width):
+                engine = MotionEngine()
+                frame = rng.integers(0, 256, (height, width, 3), dtype=np.uint8)
+                engine.process(frame)
+                heatmap, energy = engine.process(np.roll(frame, 1, axis=1))
+                self.assertEqual(heatmap.shape, (8, 8))
+                self.assertTrue(np.isfinite(heatmap).all())
+                self.assertTrue(np.isfinite(energy))
+                self.assertTrue((heatmap >= 0).all())
+                self.assertAlmostEqual(energy, float(heatmap.mean()), places=6)
+                np.testing.assert_array_equal(heatmap[height:, :], 0)
+                np.testing.assert_array_equal(heatmap[:, width:], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

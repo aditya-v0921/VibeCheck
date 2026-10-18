@@ -119,12 +119,12 @@ public:
         int total_cells = 0;
 
         for (int gy = 0; gy < grid_h_; gy++) {
-            const int y0 = gy * cell_h;
-            const int y1 = (gy == grid_h_ - 1) ? h : (gy + 1) * cell_h;
+            const int y0 = std::min(gy * cell_h, h);
+            const int y1 = (gy == grid_h_ - 1) ? h : std::min((gy + 1) * cell_h, h);
 
             for (int gx = 0; gx < grid_w_; gx++) {
-                const int x0 = gx * cell_w;
-                const int x1 = (gx == grid_w_ - 1) ? w : (gx + 1) * cell_w;
+                const int x0 = std::min(gx * cell_w, w);
+                const int x1 = (gx == grid_w_ - 1) ? w : std::min((gx + 1) * cell_w, w);
 
                 double sum_mag = 0.0;
                 int count = 0;
