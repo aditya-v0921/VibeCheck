@@ -32,6 +32,9 @@ public:
         if (grid_h_ <= 0 || grid_w_ <= 0) {
             throw std::invalid_argument("grid_h and grid_w must be positive.");
         }
+        if (grid_h_ > std::numeric_limits<int>::max() / grid_w_) {
+            throw std::invalid_argument("grid cell count exceeds indexing limits.");
+        }
         
         // Pre-allocate heatmap storage
         heatmap_data_.resize(grid_h_ * grid_w_, 0.0f);

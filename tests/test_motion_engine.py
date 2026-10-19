@@ -5,6 +5,29 @@ import numpy as np
 from vibe_core import MotionEngine
 
 
+class GridValidationTests(unittest.TestCase):
+    def test_overflowing_grid_products_are_rejected(self):
+        for height, width in ((65536, 65536), (2, 2147483647), (2147483647, 2)):
+            with self.subTest(height=height, width=width):
+                with self.assertRaisesRegex(ValueError, "cell count"):
+                    MotionEngine(height, width)
+
+    def test_nonpositive_grid_dimensions_are_rejected(self):
+        for height, width in ((0, 8), (8, 0), (-1, 8), (8, -1)):
+            with self.subTest(height=height, width=width):
+                with self.assertRaisesRegex(ValueError, "positive"):
+                    MotionEngine(height, width)
+
+    def test_rectangular_grids_keep_their_shape(self):
+        engine = MotionEngine(3, 5)
+        frame = np.zeros((24, 40, 3), dtype=np.uint8)
+        engine.process(frame)
+        heatmap, energy = engine.process(frame)
+        self.assertEqual(heatmap.shape, (3, 5))
+        self.assertEqual(energy, 0)
+        self.assertEqual(engine.get_stats()["grid_size"], (3, 5))
+
+
 class FrameValidationTests(unittest.TestCase):
     def test_empty_frames_are_rejected(self):
         for shape in ((0, 32, 3), (32, 0, 3)):
