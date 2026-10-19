@@ -380,14 +380,17 @@ def open_camera(source):
         # Find first available camera
         for i in range(10):
             cap = cv2.VideoCapture(i, cv2.CAP_AVFOUNDATION)
-            if cap.isOpened():
-                ret, _ = cap.read()
-                if ret:
-                    print(f"  Found camera at index {i}")
-                    source = i
-                    cap.release()
-                    break
+            try:
+                if cap.isOpened():
+                    ret, _ = cap.read()
+                    if ret:
+                        print(f"  Found camera at index {i}")
+                        source = i
+                        break
+            finally:
                 cap.release()
+        else:
+            raise RuntimeError("Could not find an available camera")
     
     print(f"\nOpening camera: {source}")
     
