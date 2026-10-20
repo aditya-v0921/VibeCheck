@@ -487,6 +487,10 @@ async def vision_loop():
                     
                     # Clean up old entries
                     prev_kpts_map = {k: v for k, v in prev_kpts_map.items() if k < people_count}
+                else:
+                    last_keypoints = None
+                    last_people_metrics = []
+                    prev_kpts_map.clear()
             
             # Calculate crowd hype
             crowd_hype = calculate_crowd_hype(last_people_metrics, people_count, mean_energy)

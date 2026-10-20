@@ -69,6 +69,25 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([payload["hypedPeople"] for payload in payloads], [1, 1])
         self.assertEqual(payloads[0]["hypeScore"], payloads[1]["hypeScore"])
 
+    async def test_missing_pose_clears_overlay_and_movement_history(self):
+        empty_data = Mock()
+        empty_data.cpu.return_value.numpy.return_value = np.empty((0, 17, 3))
+        missing_results = [SimpleNamespace(keypoints=None),
+                           SimpleNamespace(keypoints=SimpleNamespace(data=None)),
+                           SimpleNamespace(keypoints=SimpleNamespace(data=empty_data))]
+        for missing in missing_results:
+            with self.subTest(missing=missing):
+                payloads, namespace = await self.run_frames([self.pose(), missing, self.pose()], 5)
+                self.assertEqual(len(payloads), 5)
+                for payload in payloads[2:4]:
+                    self.assertEqual(payload["peopleCount"], 0)
+                    self.assertEqual(payload["keypoints"], [])
+                    self.assertEqual(payload["hypedPeople"], 0)
+                    self.assertEqual(payload["crowdMultiplier"], 0)
+                self.assertEqual(namespace["draw_skeleton"].call_count, 3)
+                self.assertIsNone(namespace["compute_person_metrics"].call_args.args[1])
+                self.assertEqual(payloads[4]["peopleCount"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
