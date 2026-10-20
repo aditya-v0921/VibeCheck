@@ -433,6 +433,8 @@ async def vision_loop():
     prev_kpts_map = {}
     last_keypoints = None
     last_people_metrics = []
+    people_count = 0
+    keypoints_list = []
     
     # Smoothing history
     energy_hist = []
@@ -456,11 +458,11 @@ async def vision_loop():
             display = frame.copy()
             heatmap, mean_energy = engine.process(frame)
             
-            people_count = 0
             people_metrics = []
-            keypoints_list = []
             
             if frame_count % POSE_EVERY_N_FRAMES == 0:
+                people_count = 0
+                keypoints_list = []
                 results = model.predict(frame, verbose=False, conf=CONF_THRESH)
                 r0 = results[0]
                 

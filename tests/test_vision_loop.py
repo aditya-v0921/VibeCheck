@@ -1,0 +1,74 @@
+import ast
+import asyncio
+import base64
+import itertools
+from pathlib import Path
+from types import SimpleNamespace
+import unittest
+from unittest.mock import AsyncMock, Mock, patch
+
+import numpy as np
+
+
+class EndOfFrames(Exception):
+    pass
+
+
+class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
+    async def run_frames(self, pose_results, frame_count):
+        # Run the actual loop without importing database or model startup.
+        path = Path(__file__).resolve().parents[1] / "main.py"
+        tree = ast.parse(path.read_text())
+        functions = [node for node in tree.body
+                     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                     and node.name in {"vision_loop", "calculate_crowd_hype", "classify_zones"}]
+        frame = np.zeros((32, 48, 3), dtype=np.uint8)
+        camera = Mock()
+        camera.read.side_effect = [(True, frame.copy()) for _ in range(frame_count + 1)] + [EndOfFrames()]
+        model = Mock()
+        model.predict.side_effect = [Mock()] + [[result] for result in pose_results]
+        engine = Mock()
+        engine.process.return_value = (np.zeros((8, 8)), 3.0)
+        cv2 = Mock()
+        cv2.imencode.return_value = (True, b"jpeg")
+        socket = SimpleNamespace(emit=AsyncMock())
+        clock = Mock()
+        clock.time.side_effect = itertools.count()
+        metrics = {"hands_up": 1.0, "jumping": 0.0, "arm_movement": 0.0,
+                   "is_hyped": True}
+        namespace = {
+            "np": np, "asyncio": asyncio, "base64": base64, "time": clock,
+            "cv2": cv2, "sio": socket, "open_camera": Mock(return_value=camera),
+            "vibe_core": SimpleNamespace(MotionEngine=Mock(return_value=engine)),
+            "YOLO": Mock(return_value=model), "CAM_SOURCE": 1,
+            "GRID_H": 8, "GRID_W": 8, "CONF_THRESH": 0.35,
+            "POSE_EVERY_N_FRAMES": 2, "EMIT_RATE_HZ": 20, "JPEG_QUALITY": 70,
+            "MIN_PEOPLE_FOR_HYPE": 1, "FULL_CROWD_SIZE": 3,
+            "WEIGHT_HANDS_UP": 0.4, "WEIGHT_JUMPING": 0.3, "WEIGHT_MOVEMENT": 0.35,
+            "INFLUX_ENABLED": False, "influx_client": None,
+            "compute_person_metrics": Mock(return_value=metrics),
+            "draw_skeleton": Mock(side_effect=lambda image, *args: image),
+        }
+        exec(compile(ast.Module(body=functions, type_ignores=[]), str(path), "exec"), namespace)
+        with patch("builtins.print"), self.assertRaises(EndOfFrames):
+            await namespace["vision_loop"]()
+        camera.release.assert_called_once_with()
+        return [call.args[1] for call in socket.emit.await_args_list], namespace
+
+    def pose(self):
+        data = Mock()
+        data.cpu.return_value.numpy.return_value = np.ones((1, 17, 3))
+        return SimpleNamespace(keypoints=SimpleNamespace(data=data))
+
+    async def test_skipped_pose_frame_keeps_latest_detection(self):
+        payloads, _ = await self.run_frames([self.pose()], 2)
+        self.assertEqual(len(payloads), 2)
+        self.assertEqual([payload["peopleCount"] for payload in payloads], [1, 1])
+        self.assertEqual(payloads[0]["keypoints"], payloads[1]["keypoints"])
+        self.assertEqual(len(payloads[1]["keypoints"]), 1)
+        self.assertEqual([payload["hypedPeople"] for payload in payloads], [1, 1])
+        self.assertEqual(payloads[0]["hypeScore"], payloads[1]["hypeScore"])
+
+
+if __name__ == "__main__":
+    unittest.main()
