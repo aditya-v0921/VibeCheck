@@ -56,6 +56,24 @@ class CameraDetectionTests(unittest.TestCase):
             self.open_camera("auto")
         capture.release.assert_called_once_with()
 
+    def test_fallback_releases_failed_backend(self):
+        failed = self.capture(False)
+        fallback = self.capture(True)
+        self.cv2.VideoCapture.side_effect = [failed, fallback]
+        self.assertIs(self.open_camera(2), fallback)
+        self.assertEqual(self.cv2.VideoCapture.call_args_list,
+                         [call(2, self.cv2.CAP_AVFOUNDATION), call(2)])
+        failed.release.assert_called_once_with()
+        fallback.release.assert_not_called()
+
+    def test_failed_fallback_releases_both_handles(self):
+        captures = [self.capture(False), self.capture(False)]
+        self.cv2.VideoCapture.side_effect = captures
+        with self.assertRaisesRegex(RuntimeError, "Could not open camera 2"):
+            self.open_camera(2)
+        for capture in captures:
+            capture.release.assert_called_once_with()
+
 
 if __name__ == "__main__":
     unittest.main()

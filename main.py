@@ -396,9 +396,11 @@ def open_camera(source):
     
     cap = cv2.VideoCapture(source, cv2.CAP_AVFOUNDATION)
     if not cap.isOpened():
+        cap.release()
         cap = cv2.VideoCapture(source)
     
     if not cap.isOpened():
+        cap.release()
         raise RuntimeError(f"Could not open camera {source}")
     
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, PREFERRED_RESOLUTION[0])
