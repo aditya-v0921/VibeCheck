@@ -284,7 +284,7 @@ def calculate_crowd_hype(people_metrics, people_count, mean_energy):
     # Add energy contribution (movement even without detected gestures)
     energy_contribution = energy_factor * 0.4 * crowd_multiplier
     
-    final_hype = min(1.0, raw_hype + energy_contribution) * 1.4
+    final_hype = min(1.0, (raw_hype + energy_contribution) * 1.4)
     
     return {
         "hype_score": float(final_hype),
