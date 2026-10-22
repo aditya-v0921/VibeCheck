@@ -15,7 +15,7 @@ class EndOfFrames(Exception):
 
 
 class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
-    async def run_frames(self, pose_results, frame_count):
+    async def run_frames(self, pose_results, frame_count, startup_failure=None):
         # Run the actual loop without importing database or model startup.
         path = Path(__file__).resolve().parents[1] / "main.py"
         tree = ast.parse(path.read_text())
@@ -45,20 +45,35 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
             "POSE_EVERY_N_FRAMES": 2, "EMIT_RATE_HZ": 20, "JPEG_QUALITY": 70,
             "MIN_PEOPLE_FOR_HYPE": 1, "FULL_CROWD_SIZE": 3,
             "WEIGHT_HANDS_UP": 0.4, "WEIGHT_JUMPING": 0.3, "WEIGHT_MOVEMENT": 0.35,
-            "INFLUX_ENABLED": False, "influx_client": None,
+            "INFLUX_ENABLED": False, "influx_client": Mock(),
             "compute_person_metrics": Mock(return_value=metrics),
             "draw_skeleton": Mock(side_effect=lambda image, *args: image),
         }
+        if startup_failure == "engine":
+            namespace["vibe_core"].MotionEngine.side_effect = EndOfFrames()
+        elif startup_failure == "model":
+            namespace["YOLO"].side_effect = EndOfFrames()
+        elif startup_failure == "warmup":
+            model.predict.side_effect = EndOfFrames()
+        elif startup_failure == "read":
+            camera.read.side_effect = EndOfFrames()
         exec(compile(ast.Module(body=functions, type_ignores=[]), str(path), "exec"), namespace)
         with patch("builtins.print"), self.assertRaises(EndOfFrames):
             await namespace["vision_loop"]()
         camera.release.assert_called_once_with()
+        namespace["influx_client"].close.assert_called_once_with()
         return [call.args[1] for call in socket.emit.await_args_list], namespace
 
     def pose(self):
         data = Mock()
         data.cpu.return_value.numpy.return_value = np.ones((1, 17, 3))
         return SimpleNamespace(keypoints=SimpleNamespace(data=data))
+
+    async def test_startup_failures_release_camera_and_database(self):
+        for stage in ("engine", "model", "warmup", "read"):
+            with self.subTest(stage=stage):
+                payloads, _ = await self.run_frames([], 0, startup_failure=stage)
+                self.assertEqual(payloads, [])
 
     async def test_skipped_pose_frame_keeps_latest_detection(self):
         payloads, _ = await self.run_frames([self.pose()], 2)

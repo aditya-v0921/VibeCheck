@@ -419,37 +419,37 @@ def open_camera(source):
 
 async def vision_loop():
     cap = open_camera(CAM_SOURCE)
-    engine = vibe_core.MotionEngine(GRID_H, GRID_W)
-    
-    print("\nLoading YOLOv8 pose model...")
-    model = YOLO("yolov8n-pose.pt")
-    
-    ret, warm = cap.read()
-    if ret:
-        _ = model.predict(warm, verbose=False, conf=CONF_THRESH)
-        print(" Model ready")
-    
-    frame_count = 0
-    last_emit = time.time()
-    last_influx_write = time.time()
-    prev_kpts_map = {}
-    last_keypoints = None
-    last_people_metrics = []
-    people_count = 0
-    keypoints_list = []
-    
-    # Smoothing history
-    energy_hist = []
-    hype_hist = []
-    
-    print("\n" + "=" * 50)
-    print("Vision loop started!")
-    print("   Dashboard: http://localhost:3000")
-    print(f"   Min people for hype: {MIN_PEOPLE_FOR_HYPE}")
-    print(f"   Full crowd size: {FULL_CROWD_SIZE}")
-    print("=" * 50 + "\n")
-    
     try:
+        engine = vibe_core.MotionEngine(GRID_H, GRID_W)
+
+        print("\nLoading YOLOv8 pose model...")
+        model = YOLO("yolov8n-pose.pt")
+
+        ret, warm = cap.read()
+        if ret:
+            _ = model.predict(warm, verbose=False, conf=CONF_THRESH)
+            print(" Model ready")
+
+        frame_count = 0
+        last_emit = time.time()
+        last_influx_write = time.time()
+        prev_kpts_map = {}
+        last_keypoints = None
+        last_people_metrics = []
+        people_count = 0
+        keypoints_list = []
+
+        # Smoothing history
+        energy_hist = []
+        hype_hist = []
+
+        print("\n" + "=" * 50)
+        print("Vision loop started!")
+        print("   Dashboard: http://localhost:3000")
+        print(f"   Min people for hype: {MIN_PEOPLE_FOR_HYPE}")
+        print(f"   Full crowd size: {FULL_CROWD_SIZE}")
+        print("=" * 50 + "\n")
+
         while True:
             t0 = time.time()
             ret, frame = cap.read()
