@@ -403,14 +403,18 @@ def open_camera(source):
         cap.release()
         raise RuntimeError(f"Could not open camera {source}")
     
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, PREFERRED_RESOLUTION[0])
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, PREFERRED_RESOLUTION[1])
-    cap.set(cv2.CAP_PROP_FPS, PREFERRED_FPS)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    
-    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    print(f"  Resolution: {w}x{h}")
+    try:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, PREFERRED_RESOLUTION[0])
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, PREFERRED_RESOLUTION[1])
+        cap.set(cv2.CAP_PROP_FPS, PREFERRED_FPS)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        print(f"  Resolution: {w}x{h}")
+    except BaseException:
+        cap.release()
+        raise
     
     return cap
 

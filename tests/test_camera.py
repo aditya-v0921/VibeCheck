@@ -74,6 +74,18 @@ class CameraDetectionTests(unittest.TestCase):
         for capture in captures:
             capture.release.assert_called_once_with()
 
+    def test_setup_errors_release_open_camera(self):
+        for method in ("set", "get"):
+            with self.subTest(method=method):
+                capture = self.capture(True)
+                error = RuntimeError("Camera settings failed")
+                getattr(capture, method).side_effect = error
+                self.cv2.VideoCapture.return_value = capture
+                with self.assertRaises(RuntimeError) as raised:
+                    self.open_camera(2)
+                self.assertIs(raised.exception, error)
+                capture.release.assert_called_once_with()
+
 
 if __name__ == "__main__":
     unittest.main()
