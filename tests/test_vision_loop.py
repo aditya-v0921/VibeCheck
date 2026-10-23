@@ -16,7 +16,7 @@ class EndOfFrames(Exception):
 
 class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
     async def run_frames(self, pose_results, frame_count, startup_failure=None,
-                         encoding_results=None):
+                         encoding_results=None, emit_rate=20):
         # Run the actual loop without importing database or model startup.
         path = Path(__file__).resolve().parents[1] / "main.py"
         tree = ast.parse(path.read_text())
@@ -45,7 +45,7 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
             "vibe_core": SimpleNamespace(MotionEngine=Mock(return_value=engine)),
             "YOLO": Mock(return_value=model), "CAM_SOURCE": 1,
             "GRID_H": 8, "GRID_W": 8, "CONF_THRESH": 0.35,
-            "POSE_EVERY_N_FRAMES": 2, "EMIT_RATE_HZ": 20, "JPEG_QUALITY": 70,
+            "POSE_EVERY_N_FRAMES": 2, "EMIT_RATE_HZ": emit_rate, "JPEG_QUALITY": 70,
             "MIN_PEOPLE_FOR_HYPE": 1, "FULL_CROWD_SIZE": 3,
             "WEIGHT_HANDS_UP": 0.4, "WEIGHT_JUMPING": 0.3, "WEIGHT_MOVEMENT": 0.35,
             "INFLUX_ENABLED": False, "influx_client": Mock(),
@@ -94,6 +94,19 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(payloads), 1)
         self.assertEqual(payloads[0]["frame"], base64.b64encode(b"jpeg").decode())
         self.assertEqual(payloads[0]["peopleCount"], 1)
+
+    async def test_throttled_frames_skip_encoding(self):
+        payloads, namespace = await self.run_frames([self.pose()], 2, emit_rate=0.000001)
+        self.assertEqual(payloads, [])
+        namespace["cv2"].imencode.assert_not_called()
+        self.assertEqual(namespace["vibe_core"].MotionEngine.return_value.process.call_count, 2)
+
+    async def test_encoding_resumes_when_emission_is_due(self):
+        payloads, namespace = await self.run_frames([self.pose()], 2, emit_rate=0.2)
+        self.assertEqual(len(payloads), 1)
+        self.assertEqual(namespace["cv2"].imencode.call_count, 1)
+        self.assertEqual(payloads[0]["peopleCount"], 1)
+        self.assertEqual(payloads[0]["frame"], base64.b64encode(b"jpeg").decode())
 
     async def test_missing_pose_clears_overlay_and_movement_history(self):
         empty_data = Mock()

@@ -546,7 +546,11 @@ async def vision_loop():
                     print(f"InfluxDB write error: {e}")
                 last_influx_write = now
             
-            # Encode frame
+            if now - last_emit < (1.0 / EMIT_RATE_HZ):
+                await asyncio.sleep(0)
+                continue
+
+            # Encode frame only when a dashboard update is due.
             encoded, buffer = cv2.imencode('.jpg', display, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
             if not encoded:
                 await asyncio.sleep(0)
@@ -572,9 +576,8 @@ async def vision_loop():
                 "frameHeight": int(display.shape[0])
             }
             
-            if now - last_emit >= (1.0 / EMIT_RATE_HZ):
-                await sio.emit("vibe_update", payload)
-                last_emit = now
+            await sio.emit("vibe_update", payload)
+            last_emit = now
             
             await asyncio.sleep(0)
     finally:
