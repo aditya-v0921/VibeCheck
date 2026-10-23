@@ -15,7 +15,8 @@ class EndOfFrames(Exception):
 
 
 class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
-    async def run_frames(self, pose_results, frame_count, startup_failure=None):
+    async def run_frames(self, pose_results, frame_count, startup_failure=None,
+                         encoding_results=None):
         # Run the actual loop without importing database or model startup.
         path = Path(__file__).resolve().parents[1] / "main.py"
         tree = ast.parse(path.read_text())
@@ -31,6 +32,8 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         engine.process.return_value = (np.zeros((8, 8)), 3.0)
         cv2 = Mock()
         cv2.imencode.return_value = (True, b"jpeg")
+        if encoding_results is not None:
+            cv2.imencode.side_effect = encoding_results
         socket = SimpleNamespace(emit=AsyncMock())
         clock = Mock()
         clock.time.side_effect = itertools.count()
@@ -83,6 +86,14 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(payloads[1]["keypoints"]), 1)
         self.assertEqual([payload["hypedPeople"] for payload in payloads], [1, 1])
         self.assertEqual(payloads[0]["hypeScore"], payloads[1]["hypeScore"])
+
+    async def test_failed_encoding_skips_frame_and_recovers(self):
+        payloads, namespace = await self.run_frames(
+            [self.pose()], 2, encoding_results=[(False, None), (True, b"jpeg")])
+        self.assertEqual(namespace["cv2"].imencode.call_count, 2)
+        self.assertEqual(len(payloads), 1)
+        self.assertEqual(payloads[0]["frame"], base64.b64encode(b"jpeg").decode())
+        self.assertEqual(payloads[0]["peopleCount"], 1)
 
     async def test_missing_pose_clears_overlay_and_movement_history(self):
         empty_data = Mock()

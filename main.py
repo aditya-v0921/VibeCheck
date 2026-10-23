@@ -547,7 +547,10 @@ async def vision_loop():
                 last_influx_write = now
             
             # Encode frame
-            _, buffer = cv2.imencode('.jpg', display, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
+            encoded, buffer = cv2.imencode('.jpg', display, [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY])
+            if not encoded:
+                await asyncio.sleep(0)
+                continue
             frame_b64 = base64.b64encode(buffer).decode('utf-8')
             
             payload = {
