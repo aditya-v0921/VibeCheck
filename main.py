@@ -435,8 +435,8 @@ async def vision_loop():
             print(" Model ready")
 
         frame_count = 0
-        last_emit = time.time()
-        last_influx_write = time.time()
+        last_emit = time.monotonic()
+        last_influx_write = time.monotonic()
         prev_kpts_map = {}
         last_keypoints = None
         last_people_metrics = []
@@ -529,7 +529,7 @@ async def vision_loop():
             smoothed_hype = float(np.mean(hype_hist))
             
             # Write to InfluxDB
-            now = time.time()
+            now = time.monotonic()
             if INFLUX_ENABLED and influx_write_api and now - last_influx_write >= 1.0:
                 try:
                     point = (

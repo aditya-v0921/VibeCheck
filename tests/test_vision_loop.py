@@ -16,7 +16,8 @@ class EndOfFrames(Exception):
 
 class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
     async def run_frames(self, pose_results, frame_count, startup_failure=None,
-                         encoding_results=None, emit_rate=20, clock=None):
+                         encoding_results=None, emit_rate=20, clock=None,
+                         influx_enabled=False):
         # Run the actual loop without importing database or model startup.
         path = Path(__file__).resolve().parents[1] / "main.py"
         tree = ast.parse(path.read_text())
@@ -40,6 +41,7 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
             ticks = itertools.count()
             clock.time.side_effect = ticks
             clock.perf_counter.side_effect = ticks
+            clock.monotonic.side_effect = ticks
         metrics = {"hands_up": 1.0, "jumping": 0.0, "arm_movement": 0.0,
                    "is_hyped": True}
         namespace = {
@@ -51,7 +53,8 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
             "POSE_EVERY_N_FRAMES": 2, "EMIT_RATE_HZ": emit_rate, "JPEG_QUALITY": 70,
             "MIN_PEOPLE_FOR_HYPE": 1, "FULL_CROWD_SIZE": 3,
             "WEIGHT_HANDS_UP": 0.4, "WEIGHT_JUMPING": 0.3, "WEIGHT_MOVEMENT": 0.35,
-            "INFLUX_ENABLED": False, "influx_client": Mock(),
+            "INFLUX_ENABLED": influx_enabled, "influx_client": Mock(),
+            "influx_write_api": Mock(), "Point": Mock(), "INFLUX_BUCKET": "test",
             "compute_person_metrics": Mock(return_value=metrics),
             "draw_skeleton": Mock(side_effect=lambda image, *args: image),
         }
@@ -115,10 +118,22 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         clock = Mock()
         clock.time.side_effect = iter([0, 0, 10, 9, 11, 12, 13])
         clock.perf_counter.side_effect = itertools.count(1.0, 0.01)
+        clock.monotonic.side_effect = itertools.count()
         payloads, _ = await self.run_frames([self.pose()], 1, clock=clock)
         self.assertEqual(len(payloads), 1)
         self.assertEqual(payloads[0]["latencyMs"], 10.0)
         self.assertEqual(payloads[0]["fps"], 100.0)
+
+    async def test_clock_corrections_do_not_pause_updates(self):
+        clock = Mock()
+        clock.time.side_effect = itertools.count(1000, -1)
+        clock.perf_counter.side_effect = itertools.count(1.0, 0.01)
+        clock.monotonic.side_effect = itertools.chain([0, 0], itertools.count(2, 2))
+        payloads, namespace = await self.run_frames(
+            [self.pose()], 2, clock=clock, influx_enabled=True)
+        self.assertEqual(len(payloads), 2)
+        self.assertEqual(namespace["influx_write_api"].write.call_count, 2)
+        self.assertEqual([payload["ts"] for payload in payloads], [1000, 999])
 
     async def test_missing_pose_clears_overlay_and_movement_history(self):
         empty_data = Mock()
