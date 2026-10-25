@@ -16,7 +16,7 @@ class EndOfFrames(Exception):
 
 class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
     async def run_frames(self, pose_results, frame_count, startup_failure=None,
-                         encoding_results=None, emit_rate=20):
+                         encoding_results=None, emit_rate=20, clock=None):
         # Run the actual loop without importing database or model startup.
         path = Path(__file__).resolve().parents[1] / "main.py"
         tree = ast.parse(path.read_text())
@@ -35,8 +35,11 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         if encoding_results is not None:
             cv2.imencode.side_effect = encoding_results
         socket = SimpleNamespace(emit=AsyncMock())
-        clock = Mock()
-        clock.time.side_effect = itertools.count()
+        if clock is None:
+            clock = Mock()
+            ticks = itertools.count()
+            clock.time.side_effect = ticks
+            clock.perf_counter.side_effect = ticks
         metrics = {"hands_up": 1.0, "jumping": 0.0, "arm_movement": 0.0,
                    "is_hyped": True}
         namespace = {
@@ -107,6 +110,15 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(namespace["cv2"].imencode.call_count, 1)
         self.assertEqual(payloads[0]["peopleCount"], 1)
         self.assertEqual(payloads[0]["frame"], base64.b64encode(b"jpeg").decode())
+
+    async def test_frame_timing_ignores_wall_clock_corrections(self):
+        clock = Mock()
+        clock.time.side_effect = iter([0, 0, 10, 9, 11, 12, 13])
+        clock.perf_counter.side_effect = itertools.count(1.0, 0.01)
+        payloads, _ = await self.run_frames([self.pose()], 1, clock=clock)
+        self.assertEqual(len(payloads), 1)
+        self.assertEqual(payloads[0]["latencyMs"], 10.0)
+        self.assertEqual(payloads[0]["fps"], 100.0)
 
     async def test_missing_pose_clears_overlay_and_movement_history(self):
         empty_data = Mock()

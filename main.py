@@ -455,7 +455,7 @@ async def vision_loop():
         print("=" * 50 + "\n")
 
         while True:
-            t0 = time.time()
+            t0 = time.perf_counter()
             ret, frame = cap.read()
             if not ret:
                 await asyncio.sleep(0.01)
@@ -516,7 +516,7 @@ async def vision_loop():
                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (100, 200, 255), 2)
             
             frame_count += 1
-            t1 = time.time()
+            t1 = time.perf_counter()
             
             # Smoothing
             energy_hist.append(float(mean_energy))
