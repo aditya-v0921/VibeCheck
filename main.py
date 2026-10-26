@@ -458,6 +458,11 @@ async def vision_loop():
             t0 = time.perf_counter()
             ret, frame = cap.read()
             if not ret:
+                engine.reset()
+                prev_kpts_map.clear()
+                energy_hist.clear()
+                hype_hist.clear()
+                frame_count = 0
                 await asyncio.sleep(0.01)
                 continue
             

@@ -17,7 +17,7 @@ class EndOfFrames(Exception):
 class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
     async def run_frames(self, pose_results, frame_count, startup_failure=None,
                          encoding_results=None, emit_rate=20, clock=None,
-                         influx_enabled=False):
+                         influx_enabled=False, dropped_reads=0):
         # Run the actual loop without importing database or model startup.
         path = Path(__file__).resolve().parents[1] / "main.py"
         tree = ast.parse(path.read_text())
@@ -26,11 +26,15 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
                      and node.name in {"vision_loop", "calculate_crowd_hype", "classify_zones"}]
         frame = np.zeros((32, 48, 3), dtype=np.uint8)
         camera = Mock()
-        camera.read.side_effect = [(True, frame.copy()) for _ in range(frame_count + 1)] + [EndOfFrames()]
+        reads = [(True, frame.copy()) for _ in range(frame_count + 1)]
+        reads[2:2] = [(False, None)] * dropped_reads
+        camera.read.side_effect = reads + [EndOfFrames()]
         model = Mock()
         model.predict.side_effect = [Mock()] + [[result] for result in pose_results]
         engine = Mock()
         engine.process.return_value = (np.zeros((8, 8)), 3.0)
+        if dropped_reads:
+            engine.process.side_effect = [(np.zeros((8, 8)), 9.0), (np.zeros((8, 8)), 0.0)]
         cv2 = Mock()
         cv2.imencode.return_value = (True, b"jpeg")
         if encoding_results is not None:
@@ -92,6 +96,19 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(payloads[1]["keypoints"]), 1)
         self.assertEqual([payload["hypedPeople"] for payload in payloads], [1, 1])
         self.assertEqual(payloads[0]["hypeScore"], payloads[1]["hypeScore"])
+
+    async def test_dropped_read_restarts_motion_pose_and_smoothing(self):
+        payloads, namespace = await self.run_frames([self.pose(), self.pose()], 2, dropped_reads=1)
+        engine = namespace["vibe_core"].MotionEngine.return_value
+        engine.reset.assert_called_once_with()
+        self.assertEqual(len(payloads), 2)
+        self.assertEqual(payloads[0]["meanEnergy"], 9.0)
+        self.assertEqual(payloads[1]["meanEnergy"], 0.0)
+        metrics = namespace["compute_person_metrics"]
+        self.assertEqual(metrics.call_count, 2)
+        self.assertIsNone(metrics.call_args.args[1])
+        expected = namespace["calculate_crowd_hype"]([metrics.return_value], 1, 0.0)
+        self.assertEqual(payloads[1]["hypeScore"], expected["hype_score"])
 
     async def test_failed_encoding_skips_frame_and_recovers(self):
         payloads, namespace = await self.run_frames(
