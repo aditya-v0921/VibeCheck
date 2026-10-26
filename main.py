@@ -586,9 +586,11 @@ async def vision_loop():
             
             await asyncio.sleep(0)
     finally:
-        cap.release()
-        if influx_client:
-            influx_client.close()
+        try:
+            cap.release()
+        finally:
+            if influx_client:
+                influx_client.close()
 
 
 # HTTP ROUTES

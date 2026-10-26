@@ -17,7 +17,7 @@ class EndOfFrames(Exception):
 class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
     async def run_frames(self, pose_results, frame_count, startup_failure=None,
                          encoding_results=None, emit_rate=20, clock=None,
-                         influx_enabled=False, dropped_reads=0):
+                         influx_enabled=False, dropped_reads=0, release_failure=False):
         # Run the actual loop without importing database or model startup.
         path = Path(__file__).resolve().parents[1] / "main.py"
         tree = ast.parse(path.read_text())
@@ -26,6 +26,9 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
                      and node.name in {"vision_loop", "calculate_crowd_hype", "classify_zones"}]
         frame = np.zeros((32, 48, 3), dtype=np.uint8)
         camera = Mock()
+        release_error = EndOfFrames("Camera release failed")
+        if release_failure:
+            camera.release.side_effect = release_error
         reads = [(True, frame.copy()) for _ in range(frame_count + 1)]
         reads[2:2] = [(False, None)] * dropped_reads
         camera.read.side_effect = reads + [EndOfFrames()]
@@ -71,10 +74,12 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         elif startup_failure == "read":
             camera.read.side_effect = EndOfFrames()
         exec(compile(ast.Module(body=functions, type_ignores=[]), str(path), "exec"), namespace)
-        with patch("builtins.print"), self.assertRaises(EndOfFrames):
+        with patch("builtins.print"), self.assertRaises(EndOfFrames) as raised:
             await namespace["vision_loop"]()
         camera.release.assert_called_once_with()
         namespace["influx_client"].close.assert_called_once_with()
+        if release_failure:
+            self.assertIs(raised.exception, release_error)
         return [call.args[1] for call in socket.emit.await_args_list], namespace
 
     def pose(self):
@@ -87,6 +92,10 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(stage=stage):
                 payloads, _ = await self.run_frames([], 0, startup_failure=stage)
                 self.assertEqual(payloads, [])
+
+    async def test_camera_release_error_still_closes_database(self):
+        payloads, _ = await self.run_frames([], 0, release_failure=True)
+        self.assertEqual(payloads, [])
 
     async def test_skipped_pose_frame_keeps_latest_detection(self):
         payloads, _ = await self.run_frames([self.pose()], 2)
