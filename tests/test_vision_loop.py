@@ -17,7 +17,8 @@ class EndOfFrames(Exception):
 class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
     async def run_frames(self, pose_results, frame_count, startup_failure=None,
                          encoding_results=None, emit_rate=20, clock=None,
-                         influx_enabled=False, dropped_reads=0, release_failure=False):
+                         influx_enabled=False, dropped_reads=0, release_failure=False,
+                         frame_sizes=None):
         # Run the actual loop without importing database or model startup.
         path = Path(__file__).resolve().parents[1] / "main.py"
         tree = ast.parse(path.read_text())
@@ -30,13 +31,16 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         if release_failure:
             camera.release.side_effect = release_error
         reads = [(True, frame.copy()) for _ in range(frame_count + 1)]
+        if frame_sizes is not None:
+            reads[1:] = [(True, np.zeros((height, width, 3), dtype=np.uint8))
+                         for height, width in frame_sizes]
         reads[2:2] = [(False, None)] * dropped_reads
         camera.read.side_effect = reads + [EndOfFrames()]
         model = Mock()
         model.predict.side_effect = [Mock()] + [[result] for result in pose_results]
         engine = Mock()
         engine.process.return_value = (np.zeros((8, 8)), 3.0)
-        if dropped_reads:
+        if dropped_reads or frame_sizes is not None:
             engine.process.side_effect = [(np.zeros((8, 8)), 9.0), (np.zeros((8, 8)), 0.0)]
         cv2 = Mock()
         cv2.imencode.return_value = (True, b"jpeg")
@@ -118,6 +122,21 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(metrics.call_args.args[1])
         expected = namespace["calculate_crowd_hype"]([metrics.return_value], 1, 0.0)
         self.assertEqual(payloads[1]["hypeScore"], expected["hype_score"])
+
+    async def test_resize_refreshes_pose_and_clears_smoothing(self):
+        for height, width in ((48, 48), (32, 64), (48, 64)):
+            with self.subTest(height=height, width=width):
+                payloads, namespace = await self.run_frames(
+                    [self.pose(), self.pose()], 2, frame_sizes=[(32, 48), (height, width)])
+                metrics = namespace["compute_person_metrics"]
+                self.assertEqual(metrics.call_count, 2)
+                self.assertIsNone(metrics.call_args.args[1])
+                self.assertEqual(len(payloads), 2)
+                self.assertEqual(payloads[1]["meanEnergy"], 0.0)
+                expected = namespace["calculate_crowd_hype"]([metrics.return_value], 1, 0.0)
+                self.assertEqual(payloads[1]["hypeScore"], expected["hype_score"])
+                self.assertEqual(payloads[1]["frameHeight"], height)
+                self.assertEqual(payloads[1]["frameWidth"], width)
 
     async def test_failed_encoding_skips_frame_and_recovers(self):
         payloads, namespace = await self.run_frames(

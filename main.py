@@ -442,6 +442,7 @@ async def vision_loop():
         last_people_metrics = []
         people_count = 0
         keypoints_list = []
+        last_frame_size = None
 
         # Smoothing history
         energy_hist = []
@@ -466,6 +467,14 @@ async def vision_loop():
                 await asyncio.sleep(0.01)
                 continue
             
+            frame_size = frame.shape[:2]
+            if last_frame_size is not None and frame_size != last_frame_size:
+                prev_kpts_map.clear()
+                energy_hist.clear()
+                hype_hist.clear()
+                frame_count = 0
+            last_frame_size = frame_size
+
             display = frame.copy()
             heatmap, mean_energy = engine.process(frame)
             
