@@ -48,3 +48,20 @@ The printed module path should be inside `$build_dir`. Running tests there
 avoids importing an older, checked-in `vibe_core` binary from the repository
 root. These tests exercise the motion engine with synthetic frames; they do
 not require a camera or start the backend or dashboard.
+
+## Camera configuration
+
+Camera settings are constants in `main.py`; they are not command-line options.
+`CAM_SOURCE` defaults to `1`. Set it to `0` to try the first camera, or to
+`"auto"` on macOS to probe indices 0 through 9 using AVFoundation and select
+the first camera that returns a frame. If none is readable, auto-detection
+raises `Could not find an available camera`.
+
+For an explicit camera index, the backend tries AVFoundation first, then
+OpenCV's default backend if opening fails. Close other apps using the camera
+and check camera permission for the application running Python if capture
+cannot start.
+
+`PREFERRED_RESOLUTION` defaults to `(1280, 720)` and `PREFERRED_FPS` to `30`.
+These are requests to the capture device; unsupported settings may be ignored.
+The startup `Resolution:` line reports the dimensions read back from the device.
