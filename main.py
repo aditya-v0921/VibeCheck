@@ -605,6 +605,10 @@ async def vision_loop():
 # HTTP ROUTES
 
 async def index_handler(request):
+    task = request.app.get("vision_task")
+    if task is None or task.done():
+        return web.Response(text="Vibe-Check vision unavailable", status=503,
+                            content_type="text/plain")
     return web.Response(text="Vibe-Check Server Running", content_type="text/plain")
 
 app.router.add_get("/", index_handler)
