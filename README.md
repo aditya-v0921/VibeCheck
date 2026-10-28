@@ -20,8 +20,9 @@ not provide the C++ build dependencies. If CMake cannot locate OpenCV, add
 `-DOpenCV_DIR=/path/to/the/directory/containing/OpenCVConfig.cmake` to the
 configure command.
 
-Activate a Python environment with `numpy` and `pybind11` installed, then run
-these commands from the repository root. The extension is built for that
+Activate a Python environment with `numpy`, `pybind11`, and `aiohttp` installed,
+then run these commands from the repository root. The status-handler tests use
+`aiohttp`; they do not start a server. The extension is built for that
 environment's Python interpreter; rebuild it when changing Python versions.
 
 ```sh
