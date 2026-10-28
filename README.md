@@ -66,3 +66,15 @@ cannot start.
 `PREFERRED_RESOLUTION` defaults to `(1280, 720)` and `PREFERRED_FPS` to `30`.
 These are requests to the capture device; unsupported settings may be ignored.
 The startup `Resolution:` line reports the dimensions read back from the device.
+
+## Server status
+
+Open `http://localhost:8000/` while the backend is running to check the vision
+task. A running task returns HTTP 200 with `Vibe-Check Server Running`.
+If the task is missing, has finished, has failed, or was cancelled, the route
+returns HTTP 503 with `Vibe-Check vision unavailable`.
+
+HTTP 200 checks task liveness only. It does not confirm that the camera is
+currently delivering frames or that database writes succeed. If the route
+returns 503, check the backend terminal for the startup or runtime error;
+the route does not restart the vision task automatically.
