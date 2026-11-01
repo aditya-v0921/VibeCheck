@@ -610,7 +610,9 @@ async def vision_loop():
 
 async def index_handler(request):
     task = request.app.get("vision_task")
-    if task is None or task.done():
+    last_frame_at = request.app.get("capture_state", {}).get("last_frame_at")
+    if (task is None or task.done() or last_frame_at is None
+            or time.monotonic() - last_frame_at > 5.0):
         return web.Response(text="Vibe-Check vision unavailable", status=503,
                             content_type="text/plain")
     return web.Response(text="Vibe-Check Server Running", content_type="text/plain")
