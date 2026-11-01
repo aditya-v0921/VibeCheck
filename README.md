@@ -70,11 +70,15 @@ The startup `Resolution:` line reports the dimensions read back from the device.
 ## Server status
 
 Open `http://localhost:8000/` while the backend is running to check the vision
-task. A running task returns HTTP 200 with `Vibe-Check Server Running`.
-If the task is missing, has finished, has failed, or was cancelled, the route
-returns HTTP 503 with `Vibe-Check vision unavailable`.
+task. A running task that processed a frame within the last five seconds
+returns HTTP 200 with `Vibe-Check Server Running`. Before the first processed
+frame, or after more than five seconds without one, the route returns HTTP
+503 with `Vibe-Check vision unavailable`. A missing, finished, failed, or
+cancelled task also returns 503. New processed frames restore 200 while the
+task is running.
 
-HTTP 200 checks task liveness only. It does not confirm that the camera is
-currently delivering frames or that database writes succeed. If the route
-returns 503, check the backend terminal for the startup or runtime error;
-the route does not restart the vision task automatically.
+The freshness check uses monotonic time, so system clock corrections do not
+change the timeout. HTTP 200 does not confirm JPEG encoding, delivery to a
+dashboard, or successful database writes. If the route returns 503, check the
+camera connection and backend terminal for startup or runtime errors; the
+route does not reconnect the camera or restart the vision task automatically.
