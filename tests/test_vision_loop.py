@@ -56,6 +56,7 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         metrics = {"hands_up": 1.0, "jumping": 0.0, "arm_movement": 0.0,
                    "is_hyped": True}
         namespace = {
+            "app": {"capture_state": {"last_frame_at": 123}},
             "np": np, "asyncio": asyncio, "base64": base64, "time": clock,
             "cv2": cv2, "sio": socket, "open_camera": Mock(return_value=camera),
             "vibe_core": SimpleNamespace(MotionEngine=Mock(return_value=engine)),
@@ -90,6 +91,19 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         data = Mock()
         data.cpu.return_value.numpy.return_value = np.ones((1, 17, 3))
         return SimpleNamespace(keypoints=SimpleNamespace(data=data))
+
+    async def test_capture_timestamp_is_cleared_before_frames_arrive(self):
+        _, namespace = await self.run_frames([], 0)
+        self.assertIsNone(namespace["app"]["capture_state"]["last_frame_at"])
+
+    async def test_capture_timestamp_uses_monotonic_frame_time(self):
+        clock = Mock()
+        clock.monotonic.side_effect = iter([0, 0, 12])
+        clock.perf_counter.side_effect = itertools.count(1.0, 0.01)
+        clock.time.return_value = 1700000000
+        payloads, namespace = await self.run_frames([self.pose()], 1, clock=clock)
+        self.assertEqual(namespace["app"]["capture_state"]["last_frame_at"], 12)
+        self.assertEqual(payloads[0]["ts"], 1700000000)
 
     async def test_startup_failures_release_camera_and_database(self):
         for stage in ("engine", "model", "warmup", "read"):

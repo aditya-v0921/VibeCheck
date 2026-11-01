@@ -81,6 +81,7 @@ sio = socketio.AsyncServer(
     max_http_buffer_size=10 * 1024 * 1024
 )
 app = web.Application()
+app["capture_state"] = {"last_frame_at": None}
 sio.attach(app)
 
 # POSE DETECTION SETUP
@@ -422,6 +423,8 @@ def open_camera(source):
 # MAIN VISION LOOP
 
 async def vision_loop():
+    capture_state = app["capture_state"]
+    capture_state["last_frame_at"] = None
     cap = open_camera(CAM_SOURCE)
     try:
         engine = vibe_core.MotionEngine(GRID_H, GRID_W)
@@ -544,6 +547,7 @@ async def vision_loop():
             
             # Write to InfluxDB
             now = time.monotonic()
+            capture_state["last_frame_at"] = now
             if INFLUX_ENABLED and influx_write_api and now - last_influx_write >= 1.0:
                 try:
                     point = (
