@@ -455,6 +455,7 @@ async def vision_loop():
         people_count = 0
         keypoints_list = []
         last_frame_size = None
+        failed_read_since = None
 
         # Smoothing history
         energy_hist = []
@@ -476,9 +477,19 @@ async def vision_loop():
                 energy_hist.clear()
                 hype_hist.clear()
                 frame_count = 0
+                failed_at = time.monotonic()
+                if failed_read_since is None:
+                    failed_read_since = failed_at
+                if failed_at - failed_read_since >= 5.0:
+                    previous_cap = cap
+                    cap = None
+                    previous_cap.release()
+                    cap = await reopen_camera(CAM_SOURCE)
+                    failed_read_since = None
                 await asyncio.sleep(0.01)
                 continue
             
+            failed_read_since = None
             frame_size = frame.shape[:2]
             if last_frame_size is not None and frame_size != last_frame_size:
                 prev_kpts_map.clear()
@@ -609,7 +620,8 @@ async def vision_loop():
             await asyncio.sleep(0)
     finally:
         try:
-            cap.release()
+            if cap is not None:
+                cap.release()
         finally:
             if influx_client:
                 influx_client.close()

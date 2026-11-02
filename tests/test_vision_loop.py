@@ -18,7 +18,7 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
     async def run_frames(self, pose_results, frame_count, startup_failure=None,
                          encoding_results=None, emit_rate=20, clock=None,
                          influx_enabled=False, dropped_reads=0, release_failure=False,
-                         frame_sizes=None):
+                         frame_sizes=None, recovery=None):
         # Run the actual loop without importing database or model startup.
         path = Path(__file__).resolve().parents[1] / "main.py"
         tree = ast.parse(path.read_text())
@@ -36,6 +36,8 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
                          for height, width in frame_sizes]
         reads[2:2] = [(False, None)] * dropped_reads
         camera.read.side_effect = reads + [EndOfFrames()]
+        replacement = Mock()
+        replacement.read.side_effect = [(True, frame.copy()), EndOfFrames()]
         model = Mock()
         model.predict.side_effect = [Mock()] + [[result] for result in pose_results]
         engine = Mock()
@@ -59,6 +61,7 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
             "app": {"capture_state": {"last_frame_at": 123}},
             "np": np, "asyncio": asyncio, "base64": base64, "time": clock,
             "cv2": cv2, "sio": socket, "open_camera": Mock(return_value=camera),
+            "reopen_camera": AsyncMock(return_value=replacement),
             "vibe_core": SimpleNamespace(MotionEngine=Mock(return_value=engine)),
             "YOLO": Mock(return_value=model), "CAM_SOURCE": 1,
             "GRID_H": 8, "GRID_W": 8, "CONF_THRESH": 0.35,
@@ -70,6 +73,8 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
             "compute_person_metrics": Mock(return_value=metrics),
             "draw_skeleton": Mock(side_effect=lambda image, *args: image),
         }
+        if recovery == "cancel":
+            namespace["reopen_camera"].side_effect = asyncio.CancelledError()
         if startup_failure == "engine":
             namespace["vibe_core"].MotionEngine.side_effect = EndOfFrames()
         elif startup_failure == "model":
@@ -79,9 +84,12 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         elif startup_failure == "read":
             camera.read.side_effect = EndOfFrames()
         exec(compile(ast.Module(body=functions, type_ignores=[]), str(path), "exec"), namespace)
-        with patch("builtins.print"), self.assertRaises(EndOfFrames) as raised:
+        expected_error = asyncio.CancelledError if recovery == "cancel" else EndOfFrames
+        with patch("builtins.print"), self.assertRaises(expected_error) as raised:
             await namespace["vision_loop"]()
         camera.release.assert_called_once_with()
+        if recovery == "success":
+            replacement.release.assert_called_once_with()
         namespace["influx_client"].close.assert_called_once_with()
         if release_failure:
             self.assertIs(raised.exception, release_error)
@@ -128,6 +136,7 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         payloads, namespace = await self.run_frames([self.pose(), self.pose()], 2, dropped_reads=1)
         engine = namespace["vibe_core"].MotionEngine.return_value
         engine.reset.assert_called_once_with()
+        namespace["reopen_camera"].assert_not_awaited()
         self.assertEqual(len(payloads), 2)
         self.assertEqual(payloads[0]["meanEnergy"], 9.0)
         self.assertEqual(payloads[1]["meanEnergy"], 0.0)
@@ -136,6 +145,20 @@ class VisionLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(metrics.call_args.args[1])
         expected = namespace["calculate_crowd_hype"]([metrics.return_value], 1, 0.0)
         self.assertEqual(payloads[1]["hypeScore"], expected["hype_score"])
+
+    async def test_persistent_outage_reopens_capture_and_resumes_frames(self):
+        payloads, namespace = await self.run_frames(
+            [self.pose(), self.pose()], 2, dropped_reads=4, recovery="success")
+        namespace["reopen_camera"].assert_awaited_once_with(1)
+        self.assertEqual(len(payloads), 2)
+        self.assertEqual(payloads[1]["meanEnergy"], 0.0)
+        self.assertIsNone(namespace["compute_person_metrics"].call_args.args[1])
+
+    async def test_cancelling_camera_recovery_closes_database(self):
+        payloads, namespace = await self.run_frames(
+            [self.pose()], 2, dropped_reads=4, recovery="cancel")
+        namespace["reopen_camera"].assert_awaited_once_with(1)
+        self.assertEqual(len(payloads), 1)
 
     async def test_resize_refreshes_pose_and_clears_smoothing(self):
         for height, width in ((48, 48), (32, 64), (48, 64)):
