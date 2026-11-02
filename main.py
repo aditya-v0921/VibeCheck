@@ -420,6 +420,15 @@ def open_camera(source):
     return cap
 
 
+async def reopen_camera(source):
+    while True:
+        try:
+            return open_camera(source)
+        except RuntimeError as error:
+            print(f"Camera unavailable: {error}; retrying in 5 seconds")
+            await asyncio.sleep(5.0)
+
+
 # MAIN VISION LOOP
 
 async def vision_loop():

@@ -1,7 +1,9 @@
 import ast
+import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, call, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 
 class CameraDetectionTests(unittest.TestCase):
@@ -85,6 +87,40 @@ class CameraDetectionTests(unittest.TestCase):
                     self.open_camera(2)
                 self.assertIs(raised.exception, error)
                 capture.release.assert_called_once_with()
+
+
+class CameraRecoveryTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        path = Path(__file__).resolve().parents[1] / "main.py"
+        tree = ast.parse(path.read_text())
+        helper = next(node for node in tree.body if isinstance(node, ast.AsyncFunctionDef)
+                      and node.name == "reopen_camera")
+        self.opener = Mock()
+        self.sleep = AsyncMock()
+        namespace = {"open_camera": self.opener, "asyncio": SimpleNamespace(sleep=self.sleep)}
+        exec(compile(ast.Module(body=[helper], type_ignores=[]), str(path), "exec"), namespace)
+        self.reopen = namespace["reopen_camera"]
+
+    async def test_open_failures_wait_then_recover(self):
+        capture = Mock()
+        self.opener.side_effect = [RuntimeError("Unavailable"), RuntimeError("Unavailable"), capture]
+        with patch("builtins.print"):
+            self.assertIs(await self.reopen(2), capture)
+        self.assertEqual(self.opener.call_args_list, [call(2)] * 3)
+        self.assertEqual(self.sleep.await_args_list, [call(5.0)] * 2)
+
+    async def test_retry_wait_can_be_cancelled(self):
+        self.opener.side_effect = RuntimeError("Unavailable")
+        self.sleep.side_effect = asyncio.CancelledError()
+        with patch("builtins.print"), self.assertRaises(asyncio.CancelledError):
+            await self.reopen(2)
+        self.opener.assert_called_once_with(2)
+
+    async def test_unexpected_errors_are_not_retried(self):
+        self.opener.side_effect = ValueError("Invalid source")
+        with self.assertRaises(ValueError):
+            await self.reopen(2)
+        self.sleep.assert_not_awaited()
 
 
 if __name__ == "__main__":
