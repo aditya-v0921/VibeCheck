@@ -81,4 +81,12 @@ The freshness check uses monotonic time, so system clock corrections do not
 change the timeout. HTTP 200 does not confirm JPEG encoding, delivery to a
 dashboard, or successful database writes. If the route returns 503, check the
 camera connection and backend terminal for startup or runtime errors; the
-route does not reconnect the camera or restart the vision task automatically.
+status route itself does not initiate recovery or restart the vision task.
+
+After capture has started, five seconds of consecutive failed reads causes
+the vision loop to release the old capture and reopen `CAM_SOURCE`. If opening
+fails with a `RuntimeError`, it logs the error and retries every five seconds;
+shutdown can cancel that wait. Brief read failures reset tracking without
+reopening the camera. Status returns to 200 once fresh frames are processed.
+Initial camera/model startup failures still stop the task and require fixing
+the underlying problem and restarting the backend.
