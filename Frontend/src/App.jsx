@@ -418,6 +418,7 @@ export default function App() {
   const isPreview = !data;
 
   useEffect(() => {
+    let staleTimer;
     const socket = io(SOCKET_URL, {
       transports: ["websocket", "polling"],
       reconnection: true,
@@ -427,14 +428,20 @@ export default function App() {
       setConnected(true);
     });
     socket.on("disconnect", () => {
+      clearTimeout(staleTimer);
       setConnected(false);
       setData(null);
     });
     socket.on("vibe_update", (payload) => {
+      clearTimeout(staleTimer);
       setData(payload);
+      staleTimer = setTimeout(() => setData(null), 5000);
     });
 
-    return () => socket.disconnect();
+    return () => {
+      clearTimeout(staleTimer);
+      socket.disconnect();
+    };
   }, []);
 
   return (
