@@ -428,6 +428,7 @@ export default function App() {
     });
     socket.on("disconnect", () => {
       setConnected(false);
+      setData(null);
     });
     socket.on("vibe_update", (payload) => {
       setData(payload);
@@ -443,9 +444,9 @@ export default function App() {
           <p className="eyebrow">Live crowd intelligence</p>
           <h1 className="logo">Vibe Check</h1>
         </div>
-        <div className={`status ${connected ? "online" : "offline"}`}>
+        <div className={`status ${connected && !isPreview ? "online" : "offline"}`}>
           <span className="status-dot" />
-          {connected ? "Live feed" : "Preview mode"}
+          {connected ? (isPreview ? "Waiting for frames" : "Live feed") : "Preview mode"}
           <span className="latency">
             {displayData.latencyMs}ms | {displayData.fps} FPS
           </span>
