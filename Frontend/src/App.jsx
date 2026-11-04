@@ -455,7 +455,7 @@ export default function App() {
           <span className="status-dot" />
           {connected ? (isPreview ? "Waiting for frames" : "Live feed") : "Preview mode"}
           <span className="latency">
-            {displayData.latencyMs}ms | {displayData.fps} FPS
+            {isPreview ? "Sample data" : `${displayData.latencyMs}ms | ${displayData.fps} FPS`}
           </span>
         </div>
       </header>
@@ -479,7 +479,7 @@ export default function App() {
                   <span />
                   <span />
                 </div>
-                <p>{isPreview ? "Camera preview pending" : "Waiting for camera"}</p>
+                <p>{isPreview ? "Sample crowd data · waiting for camera" : "Waiting for camera"}</p>
               </div>
             )}
           </div>
