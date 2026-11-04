@@ -361,8 +361,8 @@ function GenreRankings({ genres, checkins, totalCheckins }) {
   return (
     <div className="genre-panel">
       <div className="genre-header">
-        <div className="genre-title">CROWD MUSIC TASTE</div>
-        <div className="checkin-count">{totalCheckins} guests</div>
+        <div className="genre-title">DEMO MUSIC TASTE</div>
+        <div className="checkin-count">{totalCheckins} demo guests</div>
       </div>
 
       <div className="genre-list">
@@ -387,7 +387,7 @@ function GenreRankings({ genres, checkins, totalCheckins }) {
       </div>
 
       <div className="recent-checkins">
-        <div className="checkins-title">Recent Check-ins</div>
+        <div className="checkins-title">Simulated check-ins</div>
         {checkins.slice(0, 3).map((c, i) => (
           <div key={i} className="checkin-item">
             <span className="checkin-name">{c.name}</span>
